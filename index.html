@@ -23,6 +23,7 @@
   <link rel="stylesheet" href="./css/components.css">
   <link rel="stylesheet" href="./css/mobile.css">
   <link rel="stylesheet" href="./css/auth.css">
+  <link rel="stylesheet" href="./css/friends.css">
 </head>
 <body>
 
@@ -41,6 +42,7 @@
           <svg class="pc-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="16" x2="4" y2="10"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="2"/></svg>
           <span class="pc-label">Voortgang</span>
         </button>
+        <div class="friends-area" id="friendsAreaHome"></div>
         <div class="auth-area" id="authAreaHome"></div>
         <button class="icon-btn" onclick="openSettings()" title="Settings">⚙</button>
       </div>
@@ -151,6 +153,8 @@
       <div class="tb-streak desktop-only" onclick="goProgress()"><span>🔥</span><span id="appStreakNum">0</span></div>
       <button class="icon-btn desktop-only" onclick="goProgress()" title="Progress">📊</button>
       <button class="icon-btn" onclick="enterZen()" title="Fullscreen focus">⛶</button>
+      <div class="friends-area desktop-only" id="friendsAreaApp"></div>
+      <div class="auth-area desktop-only" id="authAreaApp"></div>
       <button class="icon-btn desktop-only" onclick="openSettings()" title="Settings">⚙</button>
       <button class="icon-btn desktop-only" onclick="goHome()" title="Home">⌂</button>
     </div>
@@ -335,6 +339,19 @@
   </div>
 </div>
 
+<!-- ════════ FRIENDS MODAL ════════ -->
+<div class="modal-ov" id="friendsOv">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Vrienden</div>
+      <button class="modal-x" onclick="closeFriendsModal()">✕</button>
+    </div>
+    <div class="modal-body" id="friendsModalBody">
+      <!-- Gevuld door friends.js -->
+    </div>
+  </div>
+</div>
+
 <!-- ════════ AUTH MODAL ════════ -->
 <div class="modal-ov" id="authOv">
   <div class="modal">
@@ -361,9 +378,11 @@
 <script src="./js/settings.js"></script>
 <script src="./js/app.js"></script>
 
-<!-- Supabase auth — geladen als ES module, NA de overige scripts -->
+<!-- Supabase modules — geladen als ES module, NA de overige scripts -->
 <script type="module" src="./js/supabaseClient.js"></script>
 <script type="module" src="./js/auth.js"></script>
+<script type="module" src="./js/sessions.js"></script>
+<script type="module" src="./js/friends.js"></script>
 
 </body>
 </html>

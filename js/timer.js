@@ -138,6 +138,12 @@ function phaseComplete(){
     subjectTotals[subj] = (subjectTotals[subj] || 0) + mins;
     bumpStreakIfFirst();
     saveData();
+    // Sla op in Supabase als gebruiker ingelogd is (fire-and-forget)
+    window.recordFocusSession?.({
+      minutes: mins,
+      subject: (b && b.subject && !b.isPause) ? b.subject : null,
+      completed_at: new Date().toISOString()
+    });
     checkInvitePopup();
     showReward(b, mins);
   } else if(curPhase === 'pause-block'){

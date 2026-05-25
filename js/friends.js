@@ -1,0 +1,360 @@
+// ══════════════════════════════════════════════════════
+// friends.js — Vriendensysteem via Supabase friendships
+// ══════════════════════════════════════════════════════
+
+import { supabase } from './supabaseClient.js';
+
+let _friendsTab = 'list'; // 'list' | 'requests' | 'search'
+let _searchResults = [];
+let _searchQuery = '';
+
+// ── Auth helper ────────────────────────────────────────
+async function getCurrentUserId() {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch { return null; }
+}
+
+// ══════════════════════════════════════════════════════
+// BACKEND — Supabase queries
+// ══════════════════════════════════════════════════════
+
+async function searchUsers(query) {
+  const userId = await getCurrentUserId();
+  if (!userId || query.trim().length < 2) return [];
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, username')
+    .ilike('username', `%${query.trim()}%`)
+    .neq('id', userId)
+    .limit(8);
+  return data || [];
+}
+
+async function getExistingRelation(targetId) {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('friendships')
+    .select('id, status, user_id, friend_id')
+    .or(`and(user_id.eq.${userId},friend_id.eq.${targetId}),and(user_id.eq.${targetId},friend_id.eq.${userId})`);
+  return data?.[0] ?? null;
+}
+
+async function sendFriendRequest(targetUserId) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error('Niet ingelogd');
+  const existing = await getExistingRelation(targetUserId);
+  if (existing) {
+    if (existing.status === 'accepted') throw new Error('Jullie zijn al vrienden');
+    throw new Error('Er is al een openstaand verzoek');
+  }
+  const { error } = await supabase.from('friendships').insert({
+    user_id: userId,
+    friend_id: targetUserId,
+    status: 'pending'
+  });
+  if (error) throw error;
+}
+
+async function getIncomingRequests() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+  const { data: reqs } = await supabase
+    .from('friendships')
+    .select('id, user_id, created_at')
+    .eq('friend_id', userId)
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+  if (!reqs || reqs.length === 0) return [];
+  const senderIds = reqs.map(r => r.user_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username')
+    .in('id', senderIds);
+  const pm = {};
+  (profiles || []).forEach(p => { pm[p.id] = p; });
+  return reqs.map(r => ({
+    id: r.id,
+    sender_id: r.user_id,
+    username: pm[r.user_id]?.username || '?',
+    created_at: r.created_at
+  }));
+}
+
+async function acceptRequest(friendshipId) {
+  const { error } = await supabase
+    .from('friendships')
+    .update({ status: 'accepted' })
+    .eq('id', friendshipId);
+  if (error) throw error;
+}
+
+async function declineRequest(friendshipId) {
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .eq('id', friendshipId);
+  if (error) throw error;
+}
+
+async function getFriends() {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+  const { data: fships } = await supabase
+    .from('friendships')
+    .select('id, user_id, friend_id')
+    .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+    .eq('status', 'accepted');
+  if (!fships || fships.length === 0) return [];
+  const otherIds = fships.map(f => f.user_id === userId ? f.friend_id : f.user_id);
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username')
+    .in('id', otherIds);
+  const pm = {};
+  (profiles || []).forEach(p => { pm[p.id] = p; });
+  return fships.map(f => {
+    const otherId = f.user_id === userId ? f.friend_id : f.user_id;
+    return { id: f.id, friend_id: otherId, username: pm[otherId]?.username || '?' };
+  });
+}
+
+async function removeFriend(friendshipId) {
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .eq('id', friendshipId);
+  if (error) throw error;
+}
+
+// ══════════════════════════════════════════════════════
+// UI — Modal rendering
+// ══════════════════════════════════════════════════════
+
+function openFriendsModal() {
+  renderFriendsModal();
+  document.getElementById('friendsOv').classList.add('open');
+}
+
+function closeFriendsModal() {
+  document.getElementById('friendsOv').classList.remove('open');
+}
+
+function switchFriendsTab(tab) {
+  _friendsTab = tab;
+  renderFriendsModal();
+}
+
+async function renderFriendsModal() {
+  const body = document.getElementById('friendsModalBody');
+  if (!body) return;
+
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om vrienden te gebruiken.</p>`;
+    return;
+  }
+
+  // Laad data parallel
+  const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
+  const reqCount = requests.length;
+
+  body.innerHTML = `
+    <div class="fr-tabs">
+      <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">Vrienden${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}</button>
+      <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">Verzoeken${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}</button>
+      <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">Zoeken</button>
+    </div>
+    <div id="frContent"></div>`;
+
+  const content = document.getElementById('frContent');
+
+  if (_friendsTab === 'list') {
+    renderFriendsList(content, friends);
+  } else if (_friendsTab === 'requests') {
+    renderRequests(content, requests);
+  } else {
+    renderSearch(content);
+  }
+}
+
+function renderFriendsList(container, friends) {
+  if (friends.length === 0) {
+    container.innerHTML = `
+      <div class="fr-empty">
+        <div class="fr-empty-icon">👥</div>
+        <div class="fr-empty-txt">Nog geen vrienden.</div>
+        <div class="fr-empty-sub">Zoek iemand op gebruikersnaam om te beginnen.</div>
+        <button class="btn-ghost" style="margin-top:1rem" onclick="switchFriendsTab('search')">Zoeken</button>
+      </div>`;
+    return;
+  }
+  container.innerHTML = `<div class="fr-list">
+    ${friends.map(f => `
+      <div class="fr-card">
+        <div class="fr-card-avatar">${f.username[0].toUpperCase()}</div>
+        <div class="fr-card-name">${escHtml(f.username)}</div>
+        <button class="fr-remove-btn" onclick="handleRemoveFriend('${f.id}','${escHtml(f.username)}')" title="Vriend verwijderen">✕</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderRequests(container, requests) {
+  if (requests.length === 0) {
+    container.innerHTML = `<div class="fr-empty"><div class="fr-empty-icon">📭</div><div class="fr-empty-txt">Geen openstaande verzoeken.</div></div>`;
+    return;
+  }
+  container.innerHTML = `<div class="fr-list">
+    ${requests.map(r => `
+      <div class="fr-card">
+        <div class="fr-card-avatar">${r.username[0].toUpperCase()}</div>
+        <div class="fr-card-name">${escHtml(r.username)}</div>
+        <div class="fr-req-btns">
+          <button class="fr-accept-btn" onclick="handleAccept('${r.id}')">✓ Accepteer</button>
+          <button class="fr-decline-btn" onclick="handleDecline('${r.id}')">✕</button>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function renderSearch(container) {
+  container.innerHTML = `
+    <div class="fr-search-wrap">
+      <input type="text" id="frSearchInput" class="txt-input" placeholder="Gebruikersnaam zoeken…" value="${escHtml(_searchQuery)}" oninput="handleFrSearch(this.value)" autocomplete="off" />
+    </div>
+    <div id="frSearchResults"></div>`;
+  // Focus input
+  setTimeout(() => document.getElementById('frSearchInput')?.focus(), 50);
+  if (_searchQuery) renderSearchResults(document.getElementById('frSearchResults'), _searchResults);
+}
+
+function renderSearchResults(container, results) {
+  if (!container) return;
+  if (!results.length && _searchQuery.length >= 2) {
+    container.innerHTML = `<div class="fr-empty"><div class="fr-empty-txt">Geen gebruikers gevonden.</div></div>`;
+    return;
+  }
+  if (!results.length) { container.innerHTML = ''; return; }
+  container.innerHTML = `<div class="fr-list" style="margin-top:1rem">
+    ${results.map(u => `
+      <div class="fr-card">
+        <div class="fr-card-avatar">${u.username[0].toUpperCase()}</div>
+        <div class="fr-card-name">${escHtml(u.username)}</div>
+        <button class="fr-add-btn" onclick="handleSendRequest('${u.id}','${escHtml(u.username)}',this)">+ Voeg toe</button>
+      </div>`).join('')}
+  </div>`;
+}
+
+// ── Event handlers (exposed to window) ─────────────────
+
+let _searchT = null;
+async function handleFrSearch(val) {
+  _searchQuery = val;
+  const resultsEl = document.getElementById('frSearchResults');
+  if (val.trim().length < 2) { _searchResults = []; if (resultsEl) resultsEl.innerHTML = ''; return; }
+  if (_searchT) clearTimeout(_searchT);
+  _searchT = setTimeout(async () => {
+    _searchResults = await searchUsers(val);
+    renderSearchResults(document.getElementById('frSearchResults'), _searchResults);
+  }, 300);
+}
+
+async function handleSendRequest(targetId, username, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    await sendFriendRequest(targetId);
+    if (btn) { btn.textContent = '✓ Verzonden'; btn.classList.add('fr-sent'); }
+    toast(`Vriendschapsverzoek verzonden aan ${username}!`);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = '+ Voeg toe'; }
+    toast(e.message);
+  }
+}
+
+async function handleAccept(friendshipId) {
+  try {
+    await acceptRequest(friendshipId);
+    toast('Vriendschapsverzoek geaccepteerd!');
+    renderFriendsModal();
+  } catch (e) { toast('Fout: ' + e.message); }
+}
+
+async function handleDecline(friendshipId) {
+  try {
+    await declineRequest(friendshipId);
+    renderFriendsModal();
+  } catch (e) { toast('Fout: ' + e.message); }
+}
+
+async function handleRemoveFriend(friendshipId, username) {
+  if (!confirm(`${username} verwijderen als vriend?`)) return;
+  try {
+    await removeFriend(friendshipId);
+    toast(`${username} verwijderd.`);
+    renderFriendsModal();
+  } catch (e) { toast('Fout: ' + e.message); }
+}
+
+// ── Utility ────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function toast(msg) {
+  if (typeof window.banner === 'function') window.banner(msg);
+}
+
+// ── Vrienden-knop tonen/verbergen op basis van auth ────
+async function updateFriendsUI(userId) {
+  const areas = document.querySelectorAll('.friends-area');
+  areas.forEach(area => {
+    if (userId) {
+      area.innerHTML = `
+        <button class="icon-btn" onclick="openFriendsModal()" title="Vrienden">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </button>`;
+      // Badge voor openstaande verzoeken
+      getIncomingRequests().then(reqs => {
+        if (reqs.length > 0) {
+          area.querySelectorAll('button').forEach(btn => {
+            if (!btn.querySelector('.fr-notif-dot')) {
+              const dot = document.createElement('span');
+              dot.className = 'fr-notif-dot';
+              btn.style.position = 'relative';
+              btn.appendChild(dot);
+            }
+          });
+        }
+      });
+    } else {
+      area.innerHTML = '';
+    }
+  });
+}
+
+// ── Auth state listener ─────────────────────────────────
+supabase.auth.onAuthStateChange(async (event, session) => {
+  await updateFriendsUI(session?.user?.id ?? null);
+});
+
+// Init
+(async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  await updateFriendsUI(session?.user?.id ?? null);
+})();
+
+// ── Expose aan window ───────────────────────────────────
+window.openFriendsModal  = openFriendsModal;
+window.closeFriendsModal = closeFriendsModal;
+window.switchFriendsTab  = switchFriendsTab;
+window.handleFrSearch    = handleFrSearch;
+window.handleSendRequest = handleSendRequest;
+window.handleAccept      = handleAccept;
+window.handleDecline     = handleDecline;
+window.handleRemoveFriend = handleRemoveFriend;
