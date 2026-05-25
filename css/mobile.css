@@ -1,0 +1,167 @@
+/* ════════════════════════════════════════════════
+   mobile.css — Responsive / mobile-first overrides
+   ════════════════════════════════════════════════ */
+
+/* ── Mobile (≤ 820 px) ── */
+@media (max-width: 820px) {
+  .cards { grid-template-columns: 1fr; }
+  .home-hero { padding: 2rem 0 1.8rem; }
+  .app-body { grid-template-columns: 1fr; }
+
+  /* Right column becomes a bottom sheet */
+  .right-col {
+    position: fixed;
+    left: 0; right: 0; bottom: 0; top: auto;
+    max-height: 78vh;
+    border-left: none;
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    transform: translateY(110%);
+    transition: transform .35s cubic-bezier(.4, 0, .2, 1);
+    z-index: 60;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, .4);
+  }
+  .right-col.open { transform: translateY(0); }
+
+  .app-body.collapsed { grid-template-columns: 1fr; }
+  .collapse-btn { display: none; }
+
+  /* Bottom sheet handle */
+  .rc-head { padding-top: 1.3rem; position: relative; }
+  .rc-head::before {
+    content: "";
+    position: absolute;
+    top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 40px; height: 4px;
+    border-radius: 99px;
+    background: var(--border);
+  }
+
+  /* Mobile bottom action bar */
+  .mob-bar {
+    display: flex;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: .6rem .8rem calc(.6rem + var(--safe-b));
+    gap: 8px;
+    z-index: 40;
+  }
+  body.zen .mob-bar { display: none; }
+
+  .mob-bar-btn {
+    flex: 1;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 12px;
+    padding: 11px;
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-height: 50px;
+    justify-content: center;
+    transition: all .2s;
+  }
+  .mob-bar-btn:hover,
+  .mob-bar-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .mob-bar-btn svg { width: 18px; height: 18px; }
+
+  /* Left column needs bottom padding for the action bar */
+  .left-col { padding-bottom: 74px; overflow-y: auto; }
+
+  .stage { padding: 1.5rem 1.2rem; }
+  .app-topbar { padding-left: 1.1rem; padding-right: 1.1rem; }
+  .app-topbar .tb-right .desktop-only { display: none; }
+  .desktop-only { display: none !important; }
+
+  .day-bar { padding: .6rem 1.1rem; }
+  .prog-head { flex-wrap: wrap; gap: 1rem; }
+  .lifetime-row { grid-template-columns: 1fr; }
+  .reward-grid { grid-template-columns: 1fr; }
+
+  /* Modals slide up from bottom on mobile */
+  .modal {
+    max-height: 92vh;
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    align-self: flex-end;
+    max-width: 100%;
+  }
+  .modal-ov { align-items: flex-end; padding: 0; }
+
+  .set-tabs { top: 65px; }
+  .cnt-num { font-size: 64px; }
+  .flow-prog { max-width: 140px; }
+}
+
+/* ── Landscape on mobile ── */
+@media (max-width: 820px) and (orientation: landscape) {
+  .ring-wrap { margin: 0; }
+  .stage { gap: .7rem; padding: .8rem; }
+}
+
+/* ── Desktop: hide mobile-only elements ── */
+@media (min-width: 821px) {
+  .mob-only { display: none !important; }
+}
+
+/* ── Narrow phones: squeeze quick-add button ── */
+@media (max-width: 600px) {
+  .quick-add-btn { padding: 8px 12px; font-size: 12px; }
+}
+
+/* ── Medium screens: hide task side panel ── */
+@media (max-width: 1000px) {
+  .task-side-panel { display: none !important; }
+}
+
+/* ── Day Planner responsive ── */
+@media (max-width: 820px) {
+  /* Stats: 2×2 grid, hide time inputs in quick mode */
+  .planner-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .planner-stats.quick-mode {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .planner-wrap { padding: max(1rem, var(--safe-t)) 1rem calc(4rem + var(--safe-b)); }
+  .pln-time { width: 38px; font-size: 10px; }
+  .pq-row { gap: 6px; }
+  .pq-btn { font-size: 12px; padding: 7px 11px; }
+}
+
+@media (max-width: 420px) {
+  /* Very small: hide timeline time column */
+  .pln-time { display: none; }
+  .planner-stats { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Block detail modal mobile ── */
+@media (max-width: 820px) {
+  #blockDetailOv .modal {
+    border-radius: var(--r-md) var(--r-md) 0 0;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    max-height: 90dvh; overflow-y: auto;
+    animation: slideUp .25s ease;
+  }
+  .bd-foot { padding-bottom: calc(1.5rem + var(--safe-b)); }
+}
+
+/* ── Invite modal mobile ── */
+@media (max-width: 820px) {
+  .invite-modal {
+    border-radius: var(--r-md) var(--r-md) 0 0;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    animation: slideUp .25s ease;
+  }
+  .invite-body { padding-bottom: calc(1.5rem + var(--safe-b)); }
+}
+

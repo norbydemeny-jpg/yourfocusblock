@@ -1,0 +1,141 @@
+/* ════════════════════════════════════════════════
+   themes.css — Color themes, phase modes, backgrounds
+   ════════════════════════════════════════════════ */
+
+/* ── Accent color themes (dark mode) ── */
+body.t-rose   { --accent:#fb7185; --at:#130408; --glow:rgba(251,113,133,0.15); }
+body.t-violet { --accent:#c084fc; --at:#0c0614; --glow:rgba(192,132,252,0.15); }
+body.t-sky    { --accent:#67e8f9; --at:#031014; --glow:rgba(103,232,249,0.13); }
+body.t-amber  { --accent:#fcd34d; --at:#100c01; --glow:rgba(252,211,77,0.13); }
+body.t-sage   { --accent:#6ee7b7; --at:#03100b; --glow:rgba(110,231,183,0.13); }
+body.t-warm   {
+  --bg:#14110d; --bg2:#1d1812; --bg3:#272016; --bg4:#322a1e;
+  --accent:#f0a868; --at:#140a02; --text:#f2ebe0;
+  --glow:rgba(240,168,104,0.13);
+}
+
+/* ── Light mode ── */
+body.lt {
+  --bg:#f4f1ea; --bg2:#fbf9f4; --bg3:#ece8df; --bg4:#e2ddd2;
+  --text:#1a1814; --muted:#8a857a; --mid:#56524a;
+  --border:rgba(0,0,0,0.09); --border2:rgba(0,0,0,0.05);
+  --accent:#5b7a1f; --at:#f4f1ea;
+  --glow:rgba(91,122,31,0.12);
+  --shadow:0 8px 40px rgba(0,0,0,0.1);
+}
+body.lt.t-rose   { --accent:#c14358; --at:#fff; --glow:rgba(193,67,88,0.12); }
+body.lt.t-violet { --accent:#8b4fd6; --at:#fff; --glow:rgba(139,79,214,0.12); }
+body.lt.t-sky    { --accent:#1f7d92; --at:#fff; --glow:rgba(31,125,146,0.12); }
+body.lt.t-amber  { --accent:#b07d12; --at:#fff; --glow:rgba(176,125,18,0.12); }
+body.lt.t-sage   { --accent:#1f8a5f; --at:#fff; --glow:rgba(31,138,95,0.12); }
+body.lt.t-warm   { --bg:#f7f0e6; --bg2:#fdf8ef; --bg3:#efe5d6; --accent:#b56a28; --at:#fff; }
+
+/* ── Phase color modes ──
+   Focus = your chosen theme accent.
+   Short break = green shift. Long break = indigo shift.
+   These override the accent entirely so you can see the phase from across the room. */
+body.ph-short {
+  --bg:#0b1512; --bg2:#0f1c17; --bg3:#16271f;
+  --accent:#34d399; --at:#04130d;
+  --glow:rgba(52,211,153,0.35); --mid:#5fb89a;
+}
+body.ph-long {
+  --bg:#0c0f1d; --bg2:#111527; --bg3:#191e36;
+  --accent:#818cf8; --at:#0a0c1c;
+  --glow:rgba(129,140,248,0.38); --mid:#8b93c9;
+}
+body.lt.ph-short {
+  --bg:#e7f6ef; --bg2:#f3fbf7; --bg3:#dcefe5;
+  --accent:#0f9d6b; --at:#fff;
+  --glow:rgba(16,157,107,0.25); --mid:#4f8d75;
+}
+body.lt.ph-long {
+  --bg:#eaecfb; --bg2:#f5f6fd; --bg3:#e0e3f7;
+  --accent:#5b63d6; --at:#fff;
+  --glow:rgba(91,99,214,0.25); --mid:#6a70b8;
+}
+
+/* ── Phase flag badge ── */
+.phase-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--at);
+  transition: background 0.6s, color 0.6s;
+}
+.phase-flag .pf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--at);
+  opacity: 0.85;
+}
+body.ph-short .phase-flag,
+body.ph-long  .phase-flag { animation: flagpop 0.6s ease; }
+
+/* ── Atmospheric background gradients ── */
+#atmos {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--glow), transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 110%, var(--glow), transparent 55%);
+  opacity: 0.6;
+  transition: opacity 0.8s, background 0.8s;
+}
+
+/* ── Custom background photo ── */
+#bgPhoto {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  display: none;
+  filter: blur(8px);
+  transform: scale(1.06);
+}
+body.has-bg #bgPhoto { display: block; }
+body.has-bg #bgPhoto::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0.62;
+}
+body.has-bg {
+  --text: #fff;
+  --muted: rgba(255,255,255,0.62);
+  --mid: rgba(255,255,255,0.82);
+  --border: rgba(255,255,255,0.18);
+  --bg2: rgba(20,20,20,0.55);
+  --bg3: rgba(40,40,40,0.5);
+}
+body.has-bg.lt {
+  --text: #111;
+  --muted: rgba(0,0,0,0.6);
+  --mid: rgba(0,0,0,0.78);
+  --border: rgba(0,0,0,0.16);
+  --bg2: rgba(255,255,255,0.55);
+  --bg3: rgba(255,255,255,0.4);
+}
+
+/* ── Zen (fullscreen focus) mode ── */
+body.zen .app-topbar,
+body.zen .day-bar,
+body.zen .phase-tabs,
+body.zen .ends-pill     { display: none !important; }
+body.zen .app-body      { grid-template-columns: 1fr; }
+body.zen .right-col     { display: none !important; }
+body.zen .stage         { justify-content: center; gap: 1.6rem; }
+body.zen .zen-exit      { display: flex; }
+body.zen .mob-bar       { display: none; }

@@ -1,0 +1,139 @@
+/* ════════════════════════════════════════════════
+   base.css — Reset, tokens, global foundations
+   ════════════════════════════════════════════════ */
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+html, body { height: 100%; }
+
+/* ── Design tokens ── */
+:root {
+  /* Backgrounds */
+  --bg:  #0f0f0e;
+  --bg2: #181816;
+  --bg3: #222220;
+  --bg4: #2c2c29;
+
+  /* Accent (default: lime) */
+  --accent: #c8f060;
+  --at:     #0c0e06;   /* text on accent */
+  --glow:   rgba(200,240,96,0.13);
+
+  /* Text */
+  --text:   #f0ede6;
+  --muted:  #6b6862;
+  --mid:    #9a9790;
+
+  /* Borders */
+  --border:  rgba(255,255,255,0.08);
+  --border2: rgba(255,255,255,0.05);
+
+  /* Radii */
+  --r-sm: 12px;
+  --r-md: 18px;
+  --r-lg: 24px;
+  --r-xl: 28px;
+
+  /* Shadow */
+  --shadow: 0 8px 40px rgba(0,0,0,0.4);
+
+  /* Fonts */
+  --ff: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fs: 'Instrument Serif', Georgia, serif;
+  --fm: 'DM Mono', ui-monospace, monospace;
+
+  /* Safe areas (notch/home-bar) */
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t: env(safe-area-inset-top,    0px);
+}
+
+/* ── Global body ── */
+body {
+  font-family: var(--ff);
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.8s ease, color 0.6s ease;
+}
+body.scrollable { overflow: auto; }
+
+/* ── Element resets ── */
+button            { font-family: var(--ff); cursor: pointer; }
+input,
+textarea,
+select            { font-family: var(--ff); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar          { width: 5px; height: 5px; }
+::-webkit-scrollbar-thumb    { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-track    { background: transparent; }
+
+/* ── Screen container ── */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+}
+.screen.out {
+  opacity: 0;
+  pointer-events: none;
+  display: none;
+}
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+
+/* ── Animations ── */
+.fade-in { animation: fadeUp 0.5s ease both; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flagpop {
+  0%   { transform: scale(0.85); }
+  60%  { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes ripple {
+  0%   { transform: scale(1);    opacity: 0.4; }
+  100% { transform: scale(1.35); opacity: 0; }
+}
+
+@keyframes nearpulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes ringFlash {
+  0%   { filter: drop-shadow(0 0 0px  var(--accent)); opacity: 1; transform: scale(1); }
+  30%  { filter: drop-shadow(0 0 22px var(--accent)); opacity: 0.85; transform: scale(1.045); }
+  60%  { filter: drop-shadow(0 0 14px var(--accent)); opacity: 1; transform: scale(1.02); }
+  100% { filter: drop-shadow(0 0 0px  var(--accent)); opacity: 1; transform: scale(1); }
+}
+
+@keyframes droplinepop {
+  from { transform: scaleX(0.6); opacity: 0; }
+  to   { transform: scaleX(1);   opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
