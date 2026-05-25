@@ -1,10 +1,11 @@
 // ══════════════════════════════════════════════════════
 // friends.js — Vriendensysteem via Supabase friendships
+// Kolommen: requester_id, receiver_id, status
 // ══════════════════════════════════════════════════════
 
 import { supabase } from './supabaseClient.js';
 
-let _friendsTab = 'list'; // 'list' | 'requests' | 'search'
+let _friendsTab = 'list';
 let _searchResults = [];
 let _searchQuery = '';
 
@@ -37,8 +38,8 @@ async function getExistingRelation(targetId) {
   if (!userId) return null;
   const { data } = await supabase
     .from('friendships')
-    .select('id, status, user_id, friend_id')
-    .or(`and(user_id.eq.${userId},friend_id.eq.${targetId}),and(user_id.eq.${targetId},friend_id.eq.${userId})`);
+    .select('id, status, requester_id, receiver_id')
+    .or(`and(requester_id.eq.${userId},receiver_id.eq.${targetId}),and(requester_id.eq.${targetId},receiver_id.eq.${userId})`);
   return data?.[0] ?? null;
 }
 
@@ -51,9 +52,9 @@ async function sendFriendRequest(targetUserId) {
     throw new Error('Er is al een openstaand verzoek');
   }
   const { error } = await supabase.from('friendships').insert({
-    user_id: userId,
-    friend_id: targetUserId,
-    status: 'pending'
+    requester_id: userId,
+    receiver_id:  targetUserId,
+    status:       'pending'
   });
   if (error) throw error;
 }
@@ -63,12 +64,12 @@ async function getIncomingRequests() {
   if (!userId) return [];
   const { data: reqs } = await supabase
     .from('friendships')
-    .select('id, user_id, created_at')
-    .eq('friend_id', userId)
+    .select('id, requester_id, created_at')
+    .eq('receiver_id', userId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
   if (!reqs || reqs.length === 0) return [];
-  const senderIds = reqs.map(r => r.user_id);
+  const senderIds = reqs.map(r => r.requester_id);
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, username')
@@ -76,9 +77,9 @@ async function getIncomingRequests() {
   const pm = {};
   (profiles || []).forEach(p => { pm[p.id] = p; });
   return reqs.map(r => ({
-    id: r.id,
-    sender_id: r.user_id,
-    username: pm[r.user_id]?.username || '?',
+    id:         r.id,
+    sender_id:  r.requester_id,
+    username:   pm[r.requester_id]?.username || '?',
     created_at: r.created_at
   }));
 }
@@ -104,11 +105,13 @@ async function getFriends() {
   if (!userId) return [];
   const { data: fships } = await supabase
     .from('friendships')
-    .select('id, user_id, friend_id')
-    .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
+    .select('id, requester_id, receiver_id')
+    .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
     .eq('status', 'accepted');
   if (!fships || fships.length === 0) return [];
-  const otherIds = fships.map(f => f.user_id === userId ? f.friend_id : f.user_id);
+  const otherIds = fships.map(f =>
+    f.requester_id === userId ? f.receiver_id : f.requester_id
+  );
   const { data: profiles } = await supabase
     .from('profiles')
     .select('id, username')
@@ -116,7 +119,7 @@ async function getFriends() {
   const pm = {};
   (profiles || []).forEach(p => { pm[p.id] = p; });
   return fships.map(f => {
-    const otherId = f.user_id === userId ? f.friend_id : f.user_id;
+    const otherId = f.requester_id === userId ? f.receiver_id : f.requester_id;
     return { id: f.id, friend_id: otherId, username: pm[otherId]?.username || '?' };
   });
 }
@@ -150,43 +153,33 @@ function switchFriendsTab(tab) {
 async function renderFriendsModal() {
   const body = document.getElementById('friendsModalBody');
   if (!body) return;
-
   const userId = await getCurrentUserId();
   if (!userId) {
     body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om vrienden te gebruiken.</p>`;
     return;
   }
-
-  // Laad data parallel
   const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
   const reqCount = requests.length;
-
   body.innerHTML = `
     <div class="fr-tabs">
-      <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">Vrienden${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}</button>
-      <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">Verzoeken${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}</button>
-      <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">Zoeken</button>
+      <button class="fr-tab ${_friendsTab==='list'?'on':''}"     onclick="switchFriendsTab('list')">Vrienden${friends.length?` <span class="fr-badge">${friends.length}</span>`:''}</button>
+      <button class="fr-tab ${_friendsTab==='requests'?'on':''}" onclick="switchFriendsTab('requests')">Verzoeken${reqCount?` <span class="fr-badge fr-badge-alert">${reqCount}</span>`:''}</button>
+      <button class="fr-tab ${_friendsTab==='search'?'on':''}"   onclick="switchFriendsTab('search')">Zoeken</button>
     </div>
     <div id="frContent"></div>`;
-
   const content = document.getElementById('frContent');
-
-  if (_friendsTab === 'list') {
-    renderFriendsList(content, friends);
-  } else if (_friendsTab === 'requests') {
-    renderRequests(content, requests);
-  } else {
-    renderSearch(content);
-  }
+  if (_friendsTab === 'list')         renderFriendsList(content, friends);
+  else if (_friendsTab === 'requests') renderRequests(content, requests);
+  else                                 renderSearch(content);
 }
 
 function renderFriendsList(container, friends) {
-  if (friends.length === 0) {
+  if (!friends.length) {
     container.innerHTML = `
       <div class="fr-empty">
         <div class="fr-empty-icon">👥</div>
         <div class="fr-empty-txt">Nog geen vrienden.</div>
-        <div class="fr-empty-sub">Zoek iemand op gebruikersnaam om te beginnen.</div>
+        <div class="fr-empty-sub">Zoek iemand op gebruikersnaam.</div>
         <button class="btn-ghost" style="margin-top:1rem" onclick="switchFriendsTab('search')">Zoeken</button>
       </div>`;
     return;
@@ -196,13 +189,13 @@ function renderFriendsList(container, friends) {
       <div class="fr-card">
         <div class="fr-card-avatar">${f.username[0].toUpperCase()}</div>
         <div class="fr-card-name">${escHtml(f.username)}</div>
-        <button class="fr-remove-btn" onclick="handleRemoveFriend('${f.id}','${escHtml(f.username)}')" title="Vriend verwijderen">✕</button>
+        <button class="fr-remove-btn" onclick="handleRemoveFriend('${f.id}','${escHtml(f.username)}')" title="Verwijderen">✕</button>
       </div>`).join('')}
   </div>`;
 }
 
 function renderRequests(container, requests) {
-  if (requests.length === 0) {
+  if (!requests.length) {
     container.innerHTML = `<div class="fr-empty"><div class="fr-empty-icon">📭</div><div class="fr-empty-txt">Geen openstaande verzoeken.</div></div>`;
     return;
   }
@@ -222,10 +215,10 @@ function renderRequests(container, requests) {
 function renderSearch(container) {
   container.innerHTML = `
     <div class="fr-search-wrap">
-      <input type="text" id="frSearchInput" class="txt-input" placeholder="Gebruikersnaam zoeken…" value="${escHtml(_searchQuery)}" oninput="handleFrSearch(this.value)" autocomplete="off" />
+      <input type="text" id="frSearchInput" class="txt-input" placeholder="Gebruikersnaam zoeken…"
+        value="${escHtml(_searchQuery)}" oninput="handleFrSearch(this.value)" autocomplete="off" />
     </div>
     <div id="frSearchResults"></div>`;
-  // Focus input
   setTimeout(() => document.getElementById('frSearchInput')?.focus(), 50);
   if (_searchQuery) renderSearchResults(document.getElementById('frSearchResults'), _searchResults);
 }
@@ -247,8 +240,7 @@ function renderSearchResults(container, results) {
   </div>`;
 }
 
-// ── Event handlers (exposed to window) ─────────────────
-
+// ── Handlers ───────────────────────────────────────────
 let _searchT = null;
 async function handleFrSearch(val) {
   _searchQuery = val;
@@ -274,44 +266,32 @@ async function handleSendRequest(targetId, username, btn) {
 }
 
 async function handleAccept(friendshipId) {
-  try {
-    await acceptRequest(friendshipId);
-    toast('Vriendschapsverzoek geaccepteerd!');
-    renderFriendsModal();
-  } catch (e) { toast('Fout: ' + e.message); }
+  try { await acceptRequest(friendshipId); toast('Vriendschapsverzoek geaccepteerd!'); renderFriendsModal(); }
+  catch (e) { toast('Fout: ' + e.message); }
 }
 
 async function handleDecline(friendshipId) {
-  try {
-    await declineRequest(friendshipId);
-    renderFriendsModal();
-  } catch (e) { toast('Fout: ' + e.message); }
+  try { await declineRequest(friendshipId); renderFriendsModal(); }
+  catch (e) { toast('Fout: ' + e.message); }
 }
 
 async function handleRemoveFriend(friendshipId, username) {
   if (!confirm(`${username} verwijderen als vriend?`)) return;
-  try {
-    await removeFriend(friendshipId);
-    toast(`${username} verwijderd.`);
-    renderFriendsModal();
-  } catch (e) { toast('Fout: ' + e.message); }
+  try { await removeFriend(friendshipId); toast(`${username} verwijderd.`); renderFriendsModal(); }
+  catch (e) { toast('Fout: ' + e.message); }
 }
 
-// ── Utility ────────────────────────────────────────────
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-function toast(msg) {
-  if (typeof window.banner === 'function') window.banner(msg);
-}
+function toast(msg) { if (typeof window.banner === 'function') window.banner(msg); }
 
 // ── Vrienden-knop tonen/verbergen op basis van auth ────
 async function updateFriendsUI(userId) {
-  const areas = document.querySelectorAll('.friends-area');
-  areas.forEach(area => {
+  document.querySelectorAll('.friends-area').forEach(area => {
     if (userId) {
       area.innerHTML = `
-        <button class="icon-btn" onclick="openFriendsModal()" title="Vrienden">
+        <button class="icon-btn" onclick="openFriendsModal()" title="Vrienden" style="position:relative">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
@@ -319,17 +299,10 @@ async function updateFriendsUI(userId) {
             <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
         </button>`;
-      // Badge voor openstaande verzoeken
       getIncomingRequests().then(reqs => {
         if (reqs.length > 0) {
-          area.querySelectorAll('button').forEach(btn => {
-            if (!btn.querySelector('.fr-notif-dot')) {
-              const dot = document.createElement('span');
-              dot.className = 'fr-notif-dot';
-              btn.style.position = 'relative';
-              btn.appendChild(dot);
-            }
-          });
+          area.querySelector('button')?.insertAdjacentHTML('beforeend',
+            '<span class="fr-notif-dot"></span>');
         }
       });
     } else {
@@ -338,23 +311,21 @@ async function updateFriendsUI(userId) {
   });
 }
 
-// ── Auth state listener ─────────────────────────────────
 supabase.auth.onAuthStateChange(async (event, session) => {
   await updateFriendsUI(session?.user?.id ?? null);
 });
 
-// Init
 (async () => {
   const { data: { session } } = await supabase.auth.getSession();
   await updateFriendsUI(session?.user?.id ?? null);
 })();
 
 // ── Expose aan window ───────────────────────────────────
-window.openFriendsModal  = openFriendsModal;
-window.closeFriendsModal = closeFriendsModal;
-window.switchFriendsTab  = switchFriendsTab;
-window.handleFrSearch    = handleFrSearch;
-window.handleSendRequest = handleSendRequest;
-window.handleAccept      = handleAccept;
-window.handleDecline     = handleDecline;
+window.openFriendsModal   = openFriendsModal;
+window.closeFriendsModal  = closeFriendsModal;
+window.switchFriendsTab   = switchFriendsTab;
+window.handleFrSearch     = handleFrSearch;
+window.handleSendRequest  = handleSendRequest;
+window.handleAccept       = handleAccept;
+window.handleDecline      = handleDecline;
 window.handleRemoveFriend = handleRemoveFriend;
