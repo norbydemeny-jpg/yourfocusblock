@@ -7,7 +7,7 @@ import { supabase } from './supabaseClient.js';
 
 let _friendsTab = 'list';
 let _searchResults = [];
-let _searchQuery = '';
+let _searchQuery   = '';
 
 // ── Auth helper ────────────────────────────────────────
 async function getCurrentUserId() {
@@ -132,6 +132,22 @@ async function removeFriend(friendshipId) {
   if (error) throw error;
 }
 
+// ── Statussen ophalen voor vriendenlijst ───────────────
+async function _getStatuses(friendIds) {
+  if (!friendIds.length) return {};
+  // Gebruik cache van status.js als beschikbaar (sneller)
+  const cache = window.getStatusCache?.();
+  if (cache && Object.keys(cache).length > 0) return cache;
+  // Anders direct uit Supabase
+  const { data } = await supabase
+    .from('user_status')
+    .select('user_id, status')
+    .in('user_id', friendIds);
+  const map = {};
+  (data || []).forEach(r => { map[r.user_id] = r.status; });
+  return map;
+}
+
 // ══════════════════════════════════════════════════════
 // UI — Modal rendering
 // ══════════════════════════════════════════════════════
@@ -158,21 +174,51 @@ async function renderFriendsModal() {
     body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om vrienden te gebruiken.</p>`;
     return;
   }
+
   const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
   const reqCount = requests.length;
+
+  // Statussen ophalen + toevoegen aan vriendenlijst
+  const friendIds   = friends.map(f => f.friend_id);
+  const statusMap   = await _getStatuses(friendIds);
+  const statusOrder = { studying: 0, break: 1, offline: 2 };
+
+  const friendsWithStatus = friends
+    .map(f => ({ ...f, status: statusMap[f.friend_id] || 'offline' }))
+    .sort((a, b) => (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2));
+
   body.innerHTML = `
     <div class="fr-tabs">
-      <button class="fr-tab ${_friendsTab==='list'?'on':''}"     onclick="switchFriendsTab('list')">Vrienden${friends.length?` <span class="fr-badge">${friends.length}</span>`:''}</button>
-      <button class="fr-tab ${_friendsTab==='requests'?'on':''}" onclick="switchFriendsTab('requests')">Verzoeken${reqCount?` <span class="fr-badge fr-badge-alert">${reqCount}</span>`:''}</button>
-      <button class="fr-tab ${_friendsTab==='search'?'on':''}"   onclick="switchFriendsTab('search')">Zoeken</button>
+      <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">
+        Vrienden${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}
+      </button>
+      <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">
+        Verzoeken${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}
+      </button>
+      <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">Zoeken</button>
     </div>
-    <div id="frContent"></div>`;
+    <div id="frContent"></div>
+    <div class="fr-lb-link">
+      <button class="fr-lb-link-btn" onclick="closeFriendsModal();openLeaderboard()">🏆 Ranglijst bekijken</button>
+    </div>`;
+
   const content = document.getElementById('frContent');
-  if (_friendsTab === 'list')         renderFriendsList(content, friends);
+  if (_friendsTab === 'list')          renderFriendsList(content, friendsWithStatus);
   else if (_friendsTab === 'requests') renderRequests(content, requests);
   else                                 renderSearch(content);
 }
 
+// ── Status helpers ─────────────────────────────────────
+function _statusDot(status) {
+  return `<span class="status-dot ${status || 'offline'}"></span>`;
+}
+
+function _statusTxt(status) {
+  const labels = { studying: 'Aan het leren', break: 'Op pauze', offline: 'Offline' };
+  return `<span class="fr-status-txt ${status || 'offline'}">${labels[status] || 'Offline'}</span>`;
+}
+
+// ── Vriendenlijst ──────────────────────────────────────
 function renderFriendsList(container, friends) {
   if (!friends.length) {
     container.innerHTML = `
@@ -187,31 +233,48 @@ function renderFriendsList(container, friends) {
   container.innerHTML = `<div class="fr-list">
     ${friends.map(f => `
       <div class="fr-card">
-        <div class="fr-card-avatar">${f.username[0].toUpperCase()}</div>
-        <div class="fr-card-name">${escHtml(f.username)}</div>
+        <div class="fr-avatar-wrap">
+          <div class="fr-card-avatar">${f.username[0].toUpperCase()}</div>
+          ${_statusDot(f.status)}
+        </div>
+        <div class="fr-card-info">
+          <div class="fr-card-name">${escHtml(f.username)}</div>
+          <div class="fr-card-status-row">${_statusTxt(f.status)}</div>
+        </div>
         <button class="fr-remove-btn" onclick="handleRemoveFriend('${f.id}','${escHtml(f.username)}')" title="Verwijderen">✕</button>
       </div>`).join('')}
   </div>`;
 }
 
+// ── Verzoeken ──────────────────────────────────────────
 function renderRequests(container, requests) {
   if (!requests.length) {
-    container.innerHTML = `<div class="fr-empty"><div class="fr-empty-icon">📭</div><div class="fr-empty-txt">Geen openstaande verzoeken.</div></div>`;
+    container.innerHTML = `
+      <div class="fr-empty">
+        <div class="fr-empty-icon">📭</div>
+        <div class="fr-empty-txt">Geen openstaande verzoeken.</div>
+      </div>`;
     return;
   }
   container.innerHTML = `<div class="fr-list">
     ${requests.map(r => `
       <div class="fr-card">
-        <div class="fr-card-avatar">${r.username[0].toUpperCase()}</div>
-        <div class="fr-card-name">${escHtml(r.username)}</div>
+        <div class="fr-avatar-wrap">
+          <div class="fr-card-avatar">${r.username[0].toUpperCase()}</div>
+        </div>
+        <div class="fr-card-info">
+          <div class="fr-card-name">${escHtml(r.username)}</div>
+          <div class="fr-card-status-row"><span class="fr-status-txt offline">Wil bevriend zijn</span></div>
+        </div>
         <div class="fr-req-btns">
-          <button class="fr-accept-btn" onclick="handleAccept('${r.id}')">✓ Accepteer</button>
+          <button class="fr-accept-btn" onclick="handleAccept('${r.id}')">✓</button>
           <button class="fr-decline-btn" onclick="handleDecline('${r.id}')">✕</button>
         </div>
       </div>`).join('')}
   </div>`;
 }
 
+// ── Zoeken ─────────────────────────────────────────────
 function renderSearch(container) {
   container.innerHTML = `
     <div class="fr-search-wrap">
@@ -233,8 +296,12 @@ function renderSearchResults(container, results) {
   container.innerHTML = `<div class="fr-list" style="margin-top:1rem">
     ${results.map(u => `
       <div class="fr-card">
-        <div class="fr-card-avatar">${u.username[0].toUpperCase()}</div>
-        <div class="fr-card-name">${escHtml(u.username)}</div>
+        <div class="fr-avatar-wrap">
+          <div class="fr-card-avatar">${u.username[0].toUpperCase()}</div>
+        </div>
+        <div class="fr-card-info">
+          <div class="fr-card-name">${escHtml(u.username)}</div>
+        </div>
         <button class="fr-add-btn" onclick="handleSendRequest('${u.id}','${escHtml(u.username)}',this)">+ Voeg toe</button>
       </div>`).join('')}
   </div>`;
@@ -266,19 +333,29 @@ async function handleSendRequest(targetId, username, btn) {
 }
 
 async function handleAccept(friendshipId) {
-  try { await acceptRequest(friendshipId); toast('Vriendschapsverzoek geaccepteerd!'); renderFriendsModal(); }
-  catch (e) { toast('Fout: ' + e.message); }
+  try {
+    await acceptRequest(friendshipId);
+    toast('Vriendschapsverzoek geaccepteerd!');
+    renderFriendsModal();
+    window.reloadFriendStatuses?.(); // refresh homepage widget
+  } catch (e) { toast('Fout: ' + e.message); }
 }
 
 async function handleDecline(friendshipId) {
-  try { await declineRequest(friendshipId); renderFriendsModal(); }
-  catch (e) { toast('Fout: ' + e.message); }
+  try {
+    await declineRequest(friendshipId);
+    renderFriendsModal();
+  } catch (e) { toast('Fout: ' + e.message); }
 }
 
 async function handleRemoveFriend(friendshipId, username) {
   if (!confirm(`${username} verwijderen als vriend?`)) return;
-  try { await removeFriend(friendshipId); toast(`${username} verwijderd.`); renderFriendsModal(); }
-  catch (e) { toast('Fout: ' + e.message); }
+  try {
+    await removeFriend(friendshipId);
+    toast(`${username} verwijderd.`);
+    renderFriendsModal();
+    window.reloadFriendStatuses?.(); // refresh homepage widget
+  } catch (e) { toast('Fout: ' + e.message); }
 }
 
 function escHtml(s) {
@@ -324,6 +401,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
 window.openFriendsModal   = openFriendsModal;
 window.closeFriendsModal  = closeFriendsModal;
 window.switchFriendsTab   = switchFriendsTab;
+window.renderFriendsModal = renderFriendsModal;
 window.handleFrSearch     = handleFrSearch;
 window.handleSendRequest  = handleSendRequest;
 window.handleAccept       = handleAccept;

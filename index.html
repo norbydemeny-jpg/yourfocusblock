@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="./css/mobile.css">
   <link rel="stylesheet" href="./css/auth.css">
   <link rel="stylesheet" href="./css/friends.css">
+  <link rel="stylesheet" href="./css/social.css">
 </head>
 <body>
 
@@ -42,6 +43,7 @@
           <svg class="pc-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="16" x2="4" y2="10"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="2"/></svg>
           <span class="pc-label">Voortgang</span>
         </button>
+        <div class="leaderboard-area" id="lbAreaHome"></div>
         <div class="friends-area" id="friendsAreaHome"></div>
         <div class="auth-area" id="authAreaHome"></div>
         <button class="icon-btn" onclick="openSettings()" title="Settings">⚙</button>
@@ -52,6 +54,8 @@
       <div class="home-title" id="homeTitle">Plan your day.<br><em>Own your focus.</em></div>
       <div class="home-sub" id="homeSub">Pick how you want to start. You don't have to study all day — just a few focused blocks, done well.</div>
     </div>
+    <!-- Actieve vrienden widget — gevuld door status.js -->
+    <div class="active-friends-widget" id="activeFriendsWidget" style="display:none"></div>
     <div class="cards fade-in" id="startCards"></div>
     <div class="home-foot-note" id="homeFootNote"></div>
     <div class="home-motiv" id="homeMotiv"></div>
@@ -153,6 +157,7 @@
       <div class="tb-streak desktop-only" onclick="goProgress()"><span>🔥</span><span id="appStreakNum">0</span></div>
       <button class="icon-btn desktop-only" onclick="goProgress()" title="Progress">📊</button>
       <button class="icon-btn" onclick="enterZen()" title="Fullscreen focus">⛶</button>
+      <div class="leaderboard-area desktop-only" id="lbAreaApp"></div>
       <div class="friends-area desktop-only" id="friendsAreaApp"></div>
       <div class="auth-area desktop-only" id="authAreaApp"></div>
       <button class="icon-btn desktop-only" onclick="openSettings()" title="Settings">⚙</button>
@@ -352,6 +357,19 @@
   </div>
 </div>
 
+<!-- ════════ LEADERBOARD MODAL ════════ -->
+<div class="modal-ov" id="leaderboardOv">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">🏆 Ranglijst</div>
+      <button class="modal-x" onclick="closeLeaderboard()">✕</button>
+    </div>
+    <div class="modal-body" id="leaderboardBody">
+      <!-- Gevuld door leaderboard.js -->
+    </div>
+  </div>
+</div>
+
 <!-- ════════ AUTH MODAL ════════ -->
 <div class="modal-ov" id="authOv">
   <div class="modal">
@@ -383,6 +401,8 @@
 <script type="module" src="./js/auth.js"></script>
 <script type="module" src="./js/sessions.js"></script>
 <script type="module" src="./js/friends.js"></script>
+<script type="module" src="./js/status.js"></script>
+<script type="module" src="./js/leaderboard.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,280 @@
+/* ════════════════════════════════════════════════
+   social.css — Live status, leaderboard, actieve vrienden
+   ════════════════════════════════════════════════ */
+
+/* ── Status dots ── */
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 2px solid var(--bg3);
+}
+.status-dot.studying { background: var(--accent); box-shadow: 0 0 5px var(--accent); }
+.status-dot.break    { background: #ffd166; }
+.status-dot.offline  { background: var(--bg4); border-color: var(--border); }
+
+/* ── Avatar wrap met status dot ── */
+.fr-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.fr-avatar-wrap .status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--bg3);
+  border-radius: 50%;
+}
+
+/* ── Status tekst onder naam ── */
+.fr-card-status-row { margin-top: 2px; }
+.fr-status-txt {
+  font-size: 11px;
+  font-weight: 600;
+}
+.fr-status-txt.studying { color: var(--accent); }
+.fr-status-txt.break    { color: #ffd166; }
+.fr-status-txt.offline  { color: var(--muted); }
+
+/* ── Info kolom in fr-card ── */
+.fr-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.fr-card-info .fr-card-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Actieve vrienden widget (homepage) ── */
+.active-friends-widget {
+  margin-bottom: 1.2rem;
+}
+.afw-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(200, 240, 96, 0.06);
+  border: 1px solid rgba(200, 240, 96, 0.22);
+  border-radius: var(--r-sm);
+  padding: 10px 14px;
+  cursor: default;
+}
+.afw-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 7px var(--accent);
+  animation: afw-pulse 2.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes afw-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
+.afw-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.afw-avatars {
+  display: flex;
+}
+.afw-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--bg4);
+  border: 2px solid var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-left: -6px;
+}
+.afw-avatar:first-child { margin-left: 0; }
+.afw-more {
+  color: var(--muted);
+  font-size: 9px;
+  background: var(--bg3);
+}
+
+/* ── Leaderboard knop in topbar ── */
+.lb-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+.lb-icon-btn:hover {
+  color: var(--text);
+  background: var(--bg3);
+}
+
+/* ── Leaderboard modal inhoud ── */
+.lb-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg3);
+  border-radius: var(--r-sm);
+  padding: 4px;
+  margin-bottom: 1.2rem;
+}
+.lb-tab {
+  flex: 1;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--ff);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.lb-tab.on { background: var(--bg4); color: var(--text); }
+
+.lb-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  transition: border-color 0.2s;
+}
+.lb-row.lb-me {
+  border-color: rgba(200, 240, 96, 0.4);
+  background: rgba(200, 240, 96, 0.04);
+}
+.lb-rank {
+  width: 26px;
+  text-align: center;
+  font-size: 15px;
+  color: var(--muted);
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.lb-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--bg4);
+  border: 1.5px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--mid);
+  flex-shrink: 0;
+}
+.lb-me .lb-avatar { border-color: var(--accent); color: var(--accent); }
+
+.lb-info { flex: 1; min-width: 0; }
+.lb-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 5px;
+}
+.lb-you {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--accent);
+  color: var(--at);
+  padding: 1px 5px;
+  border-radius: 99px;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.lb-bar-wrap {
+  height: 3px;
+  background: var(--bg4);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.lb-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+  transition: width 0.6s ease;
+  min-width: 3px;
+}
+.lb-mins {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+  flex-shrink: 0;
+}
+.lb-row.lb-zero .lb-mins { color: var(--muted); font-weight: 500; }
+
+.lb-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.lb-empty-icon { font-size: 2rem; }
+.lb-empty-txt  { font-size: 15px; font-weight: 600; color: var(--text); }
+.lb-empty-sub  { font-size: 13px; color: var(--muted); }
+
+/* ── Leaderboard link in vrienden modal ── */
+.fr-lb-link {
+  margin-top: 1rem;
+  text-align: center;
+}
+.fr-lb-link-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--mid);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--ff);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.fr-lb-link-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

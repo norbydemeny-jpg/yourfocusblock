@@ -45,6 +45,9 @@ function startTimer(){
   if(running || timeLeft <= 0) return;
   document.getElementById('app').classList.remove('break-done');
   running = true;
+  // Live status: focus = studying, pauze/break = break
+  if(curPhase === 'focus') window.updateMyStatus?.('studying');
+  else window.updateMyStatus?.('break');
   requestNotifPerm();
   endTimestamp = Date.now() + timeLeft * 1000;
   if(iv) clearInterval(iv);
@@ -58,6 +61,7 @@ function pauseTimer(){
   running = false;
   if(iv){ clearInterval(iv); iv = null; }
   releaseWakeLock();
+  window.updateMyStatus?.('break');
   document.body.classList.remove('running');
   updatePlayBtn(); updateEndsPill(); updateMotiv(); renderCompanionStage();
 }
@@ -110,6 +114,8 @@ function resetTimer(){
 /* ---- phase completed naturally (timer hit 0) ---- */
 function phaseComplete(){
   stopTimer();
+  // Focus klaar → op pauze; break klaar → nog steeds break (wacht op startTimer)
+  if(curPhase === 'focus') window.updateMyStatus?.('break');
   playChime();
   // flash the ring
   const rw = document.getElementById('ringWrap');
