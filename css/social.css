@@ -111,6 +111,22 @@
   background: var(--bg3);
 }
 
+/* ── Compacte actieve-vrienden balk in app rechterkolom ── */
+.afw-app-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(200, 240, 96, 0.04);
+}
+.afw-app-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mid);
+}
+
 /* ── Leaderboard knop in topbar ── */
 .lb-icon-btn {
   display: inline-flex;

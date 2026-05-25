@@ -95,35 +95,57 @@ function _buildFriendList() {
   }));
 }
 
-// ── Homepage actieve-vrienden widget ──────────────────
+// ── Actieve-vrienden widget — homepage + app ───────────
 function renderWidget(friends) {
-  const widget = document.getElementById('activeFriendsWidget');
-  if (!widget) return;
-
   const active = friends.filter(f => f.status === 'studying');
-  if (active.length === 0) {
-    widget.style.display = 'none';
-    widget.innerHTML = '';
-    return;
+
+  // ── Homepage-versie (volledig) ──
+  const widget = document.getElementById('activeFriendsWidget');
+  if (widget) {
+    if (active.length === 0) {
+      widget.style.display = 'none';
+      widget.innerHTML = '';
+    } else {
+      const label = active.length === 1
+        ? `<strong>${_esc(active[0].username)}</strong> is aan het leren`
+        : `<strong>${active.length} vrienden</strong> leren nu`;
+      widget.style.display = 'block';
+      widget.innerHTML = `
+        <div class="afw-inner">
+          <span class="afw-dot"></span>
+          <div class="afw-text">${label}</div>
+          <div class="afw-avatars">
+            ${active.slice(0, 5).map(f => `
+              <div class="afw-avatar" title="${_esc(f.username)}">${f.username[0].toUpperCase()}</div>
+            `).join('')}
+            ${active.length > 5 ? `<div class="afw-avatar afw-more">+${active.length - 5}</div>` : ''}
+          </div>
+        </div>`;
+    }
   }
 
-  const names = active.map(f => f.username);
-  const label = active.length === 1
-    ? `<strong>${_esc(names[0])}</strong> is aan het leren`
-    : `<strong>${active.length} vrienden</strong> leren nu`;
-
-  widget.style.display = 'block';
-  widget.innerHTML = `
-    <div class="afw-inner">
-      <span class="afw-dot"></span>
-      <div class="afw-text">${label}</div>
-      <div class="afw-avatars">
-        ${active.slice(0, 5).map(f => `
-          <div class="afw-avatar" title="${_esc(f.username)}">${f.username[0].toUpperCase()}</div>
-        `).join('')}
-        ${active.length > 5 ? `<div class="afw-avatar afw-more">+${active.length - 5}</div>` : ''}
-      </div>
-    </div>`;
+  // ── App-versie (compact, in rechterkolom) ──
+  const appWidget = document.getElementById('activeFriendsApp');
+  if (appWidget) {
+    if (active.length === 0) {
+      appWidget.innerHTML = '';
+    } else {
+      const label = active.length === 1
+        ? `${_esc(active[0].username)} leert ook`
+        : `${active.length} vrienden leren`;
+      appWidget.innerHTML = `
+        <div class="afw-app-bar">
+          <span class="afw-dot"></span>
+          <span class="afw-app-label">${label}</span>
+          <div class="afw-avatars">
+            ${active.slice(0, 4).map(f => `
+              <div class="afw-avatar" title="${_esc(f.username)}">${f.username[0].toUpperCase()}</div>
+            `).join('')}
+            ${active.length > 4 ? `<div class="afw-avatar afw-more">+${active.length - 4}</div>` : ''}
+          </div>
+        </div>`;
+    }
+  }
 }
 
 function _esc(s) {
