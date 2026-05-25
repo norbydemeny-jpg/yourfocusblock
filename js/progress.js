@@ -5,7 +5,8 @@
    ══════════════════════════════════════════════════════ */
 
 function backFromProgress(){
-  if(progReturn === 'app' && blocks.length){ showScreen('app'); renderApp(); }
+  // Always go back to timer if there's an active session, else start screen
+  if(blocks.length){ showScreen('app'); renderApp(); }
   else goHome();
 }
 

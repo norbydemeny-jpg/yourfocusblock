@@ -6,21 +6,24 @@
 
 /* ---- Flow entry points ---- */
 function startMode(mode){
-  // New primary modes → day planner
-  if(mode === 'blocks'){ goPlanner('quick'); return; }
-  if(mode === 'day')   { goPlanner('full');  return; }
-  if(mode === 'last')  { continueLast();     return; }
-  // Legacy flow modes (kept for settings / edge cases)
-  if(mode === 'quick'){ startQuick(); return; }
-  flowMode = mode; flowStep = 0; D = {};
-  if(mode === 'plan'){
-    D.subjects = subjects.map(s => s.name);
-    D.durIdx = getDurs().findIndex(d => d.min === S.focus); if(D.durIdx < 0) D.durIdx = getDurs().findIndex(d => d.rec);
-    D.count = 4;
-    flowSteps = ['dur','count','assign','ready'];
-  } else if(mode === 'short'){
+  if(mode === 'agenda') { goAgenda(); return; }
+  if(mode === 'last')  { continueLast(); return; }
+  if(mode === 'day')   { goPlanner('full'); return; }
+  if(mode === 'quick') { startQuick(); return; }
+
+  // 'blocks' = the step-by-step wizard (same as old 'plan' flow)
+  // 'plan'   = same
+  flowMode = 'plan'; flowStep = 0; D = {};
+  D.subjects = subjects.map(s => s.name);
+  D.durIdx = getDurs().findIndex(d => d.min === S.focus);
+  if(D.durIdx < 0) D.durIdx = getDurs().findIndex(d => d.rec);
+  D.count = 4;
+  if(mode === 'short'){
     D.chosen = []; D.time = 120;
     flowSteps = ['short_subj','short_focus','short_time','ready'];
+  } else {
+    // 'blocks' and 'plan' both use the full wizard
+    flowSteps = ['dur','count','assign','ready'];
   }
   showScreen('flow'); renderFlowStep();
 }
@@ -649,6 +652,7 @@ function goPlanner(mode){
 }
 
 function backFromPlanner(){
+  if(_planningForDate){ _planningForDate = null; goAgenda(); return; }
   showScreen('home');
   renderHome();
 }
@@ -688,58 +692,85 @@ function renderPlanner(){
   document.getElementById('pqCustom').textContent = T('dpl_add_custom');
   document.getElementById('plnStartBtn').textContent = T('dpl_start_btn');
 
-  // Stats row visibility (quick mode hides start/end time)
-  const statsEl = document.getElementById('plnStats');
-  statsEl.classList.toggle('quick-mode', plannerMode === 'quick');
-
-  // Start time input
-  document.getElementById('plnStartInput').value = plannerStartTime;
-  document.getElementById('plnEndInput').value   = plannerEndTime || '';
+  // Start time input — always synced
+  const startInput = document.getElementById('plnStartInput');
+  if(startInput && document.activeElement !== startInput)
+    startInput.value = plannerStartTime;
+  const endInput = document.getElementById('plnEndInput');
+  if(endInput && document.activeElement !== endInput)
+    endInput.value = plannerEndTime || '';
 
   // Totals
   const times = plnCalcTimes();
   const totalFocusMins = (D.bb || []).filter(b => !b.isPause).reduce((s, b) => s + (b.mins || 0), 0);
-  document.getElementById('psPlannedVal').textContent = fmtDur(totalFocusMins);
-  const lastTime = times.length ? times[times.length-1].endMin : null;
-  document.getElementById('psDoneVal').textContent = lastTime != null ? plnMinToStr(lastTime) : '—';
+  const totalAllMins   = (D.bb || []).reduce((s, b) => s + (b.mins || 0), 0);
+  document.getElementById('psPlannedVal').textContent = totalFocusMins ? fmtDur(totalFocusMins) : '—';
+  const lastEndMin = times.length ? times[times.length - 1].endMin : null;
+  document.getElementById('psDoneVal').textContent = lastEndMin != null ? plnMinToStr(lastEndMin) : '—';
+
+  // End-time warning
+  const statsEl = document.getElementById('plnStats');
+  if(plannerEndTime && lastEndMin != null){
+    const [eh, em] = plannerEndTime.split(':').map(Number);
+    const endTargetMin = eh * 60 + em;
+    statsEl.classList.toggle('over-time', lastEndMin > endTargetMin);
+  } else {
+    statsEl.classList.remove('over-time');
+  }
 
   // Timeline
   const body = document.getElementById('plannerBlocks'); body.innerHTML = '';
   if(!D.bb || !D.bb.length){
     const em = document.createElement('div'); em.className = 'planner-empty';
-    em.textContent = T('dpl_empty'); body.appendChild(em);
+    em.innerHTML = `<div style="font-size:2rem;margin-bottom:12px">📋</div>${esc(T('dpl_empty'))}`;
+    body.appendChild(em);
   } else {
     D.bb.forEach((b, i) => {
       const t = times[i];
       const isPause = !!b.isPause;
       const row = document.createElement('div');
-      // Use 'block-item' so existing attachPointerDrag can find items
-      row.className = 'pln-block block-item' + (isPause ? ' is-pause' : '') + (b.done ? ' is-done' : '');
+      row.className = 'pln-block block-item' + (isPause ? ' is-pause' : '');
 
       const timeStr = plnMinToStr(t.startMin);
       const timeEndStr = plnMinToStr(t.endMin);
-      const displayName = isPause ? T('dpl_type_pause') : (b.subject || T('dpl_type_focus'));
-      const taskCount = (b.tasks || []).filter(tk => tk.text).length;
+      const tasksDone = (b.tasks || []).filter(tk => tk.done).length;
+      const tasksTotal = (b.tasks || []).filter(tk => tk.text).length;
+      const subjColor = !isPause && b.subject ? colorFor(b.subject) : null;
+
+      // Subject chips for focus blocks (inline quick-pick)
+      let inlineSubjHtml = '';
+      if(!isPause && subjects.length){
+        const chipHtml = subjects.slice(0,4).map(s =>
+          `<button class="pln-subj-chip${b.subject === s.name ? ' active' : ''}" onclick="event.stopPropagation();plnSetSubj(${i},'${s.name.replace(/'/g,"\\'")}');return false;" style="${b.subject === s.name ? 'border-color:' + colorFor(s.name) + ';color:' + colorFor(s.name) : ''}">${esc(s.name)}</button>`
+        ).join('');
+        inlineSubjHtml = `<div class="pln-subj-row">${chipHtml}</div>`;
+      }
 
       row.innerHTML = `
         <div class="pln-time">${timeStr}<br><span class="pln-time-end">${timeEndStr}</span></div>
-        <div class="pln-line"><div class="pln-dot"></div></div>
+        <div class="pln-line"><div class="pln-dot"${subjColor ? ` style="background:${subjColor};box-shadow:0 0 8px ${subjColor}40"` : ''}></div></div>
         <div class="pln-card" onclick="openBlockDetail(${i})">
-          <div class="pln-card-row">
-            <span class="pln-badge ${isPause ? 'pause' : 'focus'}">${isPause ? T('dpl_type_pause').toUpperCase() : T('dpl_type_focus').toUpperCase()}</span>
-            <div class="pln-block-info">
-              <div class="pln-block-name">${esc(displayName)}</div>
-              <div class="pln-block-meta">${fmtDur(b.mins || 5)}${taskCount ? ' · ' + taskCount + ' ' + T('tasks_lbl').toLowerCase() : ''}</div>
-              ${b.note ? `<div class="pln-block-tasks">${esc(b.note.substring(0, 60))}${b.note.length > 60 ? '…' : ''}</div>` : ''}
+          <div class="pln-card-top">
+            <div class="pln-card-left">
+              <span class="pln-badge ${isPause ? 'pause' : 'focus'}">${fmtDur(b.mins || 5)}</span>
+              <div class="pln-block-name"${subjColor ? ` style="color:${subjColor}"` : ''}>${esc(isPause ? T('dpl_type_pause') : (b.subject || T('dpl_type_focus')))}</div>
             </div>
-            <span class="pln-drag-handle bb-drag-handle" title="${T('drag_to_move')}">⋮⋮</span>
+            <div class="pln-card-actions">
+              ${tasksTotal ? `<span class="pln-task-pill">${tasksDone}/${tasksTotal}</span>` : ''}
+              <span class="pln-dur-chip" onclick="event.stopPropagation();plnChangeDur(${i},-5)" title="-5 min">−</span>
+              <span class="pln-dur-val">${b.mins}m</span>
+              <span class="pln-dur-chip" onclick="event.stopPropagation();plnChangeDur(${i},5)" title="+5 min">+</span>
+              <span class="pln-drag-handle bb-drag-handle" title="${T('drag_to_move')}">⠿</span>
+            </div>
           </div>
+          ${b.note ? `<div class="pln-block-note">${esc(b.note.substring(0,80))}${b.note.length > 80 ? '…' : ''}</div>` : ''}
+          ${inlineSubjHtml}
         </div>`;
 
       body.appendChild(row);
     });
 
-    // Wire drag-and-drop once on the container (uses existing attachPointerDrag API)
+    // Wire drag-and-drop once on the container
     attachPointerDrag(
       body,
       () => [...body.querySelectorAll('.block-item')],
@@ -758,8 +789,20 @@ function renderPlanner(){
   document.getElementById('plnStartBtn').disabled = !hasFocus;
 }
 
+function plnSetSubj(idx, name){
+  if(D.bb[idx]) D.bb[idx].subject = name;
+  renderPlanner();
+}
+
+function plnChangeDur(idx, delta){
+  const b = D.bb[idx]; if(!b) return;
+  b.mins = Math.max(5, Math.min(240, (b.mins || 25) + delta));
+  renderPlanner();
+}
+
 function onPlnStartChange(){
-  plannerStartTime = document.getElementById('plnStartInput').value || nowRounded5();
+  const v = document.getElementById('plnStartInput').value;
+  if(v) plannerStartTime = v;
   renderPlanner();
 }
 function onPlnEndChange(){
@@ -983,6 +1026,18 @@ function startFromPlanner(){
     focus: S.focus, short: S.short, long: S.long, longAfter: S.longAfter,
     blocks: D.bb.map(b => ({subject:b.subject, mins:b.mins, note:b.note, tasks:b.tasks, isPause:b.isPause}))
   };
+
+  // If planning for a future date (from agenda), save to dayPlans instead of starting
+  if(_planningForDate && _planningForDate !== todayStr()){
+    dayPlans[_planningForDate] = blocks.map(b => ({...b}));
+    _planningForDate = null;
+    D.bb = [];
+    saveData();
+    banner(T('agenda_plan_day') + ' ✓');
+    goAgenda();
+    return;
+  }
+  _planningForDate = null;
 
   initDay(); saveData();
   D.bb = []; // clear planner draft

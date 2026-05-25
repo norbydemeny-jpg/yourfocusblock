@@ -45,11 +45,17 @@ let progReturn = 'home';      // where to return from progress
 /* draft used during flow */
 let D = {};
 
+/* ---- agenda state ---- */
+let examDates = []; // [{id,date:'YYYY-MM-DD',subject,note,color}]
+let dayPlans = {};  // {'YYYY-MM-DD': copied D.bb array}
+let agendaViewDate = null; // currently shown month as Date
+
 /* ---- planner state ---- */
 let plannerStartTime = '';   // "HH:MM" — start time shown in day planner
 let plannerEndTime = '';     // "HH:MM" — optional end-time target
 let _editingBlockIdx = -1;   // which block is open in block-detail modal
 let plannerMode = 'full';    // 'full' | 'quick' — quick hides start/end time row
+let _planningForDate = null; // set when opening planner from agenda to save plan back
 
 /* ---- palette for subject dots ---- */
 const SUBJ_COLORS = ['#c8f060','#fb7185','#67e8f9','#fcd34d','#c084fc','#6ee7b7','#f0a868','#a3e635','#38bdf8','#f472b6'];
@@ -200,8 +206,8 @@ en:{
  del_lbl:"Remove",add_subj_btn:"+ Subject",quick_add_lbl:"Quick add",break_until:"break until",
  start_at:"Start at",
  // Home cards (new)
- card_blocks_t:"Quick blocks",card_blocks_d:"Add focus blocks and start immediately. Simple and fast.",card_blocks_tag:"Fastest",
- card_day_t:"Day planner",card_day_d:"Build your full study day with times, subjects and to-dos.",card_day_tag:"Full control",
+ card_blocks_t:"Quick blocks",card_blocks_d:"Answer a few questions and get a ready-made plan. Fast and smart.",card_blocks_tag:"Fastest",
+ card_day_t:"Day planner",card_day_d:"Build your own schedule: subjects, times and tasks — full control.",card_day_tag:"Full control",
  // Dagplanner screen
  dpl_title:"Day planner",dpl_sub:"Plan your study day without stress.",
  dpl_start:"Start",dpl_until:"Until",dpl_planned:"Planned",dpl_done_by:"Done by",
@@ -220,6 +226,24 @@ en:{
  prog_tip_blocks:"Total number of completed focus sessions.",
  prog_tip_focus:"Total time you've spent focused.",
  prog_tip_streak:"Consecutive study days. Keep it going!",
+ // Agenda
+ agenda_title:"Agenda",agenda_back:"Back",agenda_add_exam:"+ Exam",
+ agenda_exam_lbl:"Exam",agenda_plan_lbl:"Study plan",agenda_no_events:"No events this day.",
+ agenda_plan_day:"Plan this day",agenda_edit_day:"Edit plan",
+ exam_add_t:"Add exam",exam_subject:"Subject / Course",exam_date:"Date",exam_time:"Time (optional)",exam_note:"Note",
+ exam_save:"Save",exam_delete:"Remove",
+ agenda_today:"Today",agenda_days_left:"{n} days",agenda_tomorrow:"Tomorrow",
+ agenda_plan_d:"View your exam dates and plan study days in advance.",
+ mot_1:"You don't need to study all day. A few focused hours beats a whole distracted day.",
+ mot_2:"Every block you complete gets you closer. Keep going.",
+ mot_3:"Progress, not perfection. One session at a time.",
+ mot_4:"You're building something real — block by block.",
+ mot_5:"Start. That's always the hardest part.",
+ tip_sleep:"😴 Sleep is when your brain consolidates what you studied. Don't skip it.",
+ tip_pomodoro:"🍅 Short focused sessions beat long unfocused ones every time.",
+ tip_plan:"📋 A clear plan reduces stress. You've already done the hard part.",
+ tip_break:"🚶 Walk during your break — it resets your focus.",
+ tip_phone:"📵 Phone face-down = fewer interruptions = faster progress.",
 },
 };
 TR.nl = {
@@ -324,8 +348,8 @@ TR.nl = {
  del_lbl:"Verwijderen",add_subj_btn:"+ Vak",quick_add_lbl:"Snel toevoegen",break_until:"pauze tot",
  start_at:"Start om",
  // Home cards (new)
- card_blocks_t:"Snelle blokken",card_blocks_d:"Voeg focusblokken toe en start direct. Simpel en snel.",card_blocks_tag:"Snelst",
- card_day_t:"Dagplanning",card_day_d:"Plan je volledige studiedag met tijden, vakken en to-do's.",card_day_tag:"Volledig beheer",
+ card_blocks_t:"Snelle blokken",card_blocks_d:"Beantwoord een paar vragen en krijg een kant-en-klaar plan. Snel en slim.",card_blocks_tag:"Snelst",
+ card_day_t:"Dagplanning",card_day_d:"Maak zelf je schema: vakken, tijden en taken — volledige controle.",card_day_tag:"Volledig beheer",
  // Dagplanner
  dpl_title:"Dagplanning",dpl_sub:"Plan je studiedag zonder stress.",
  dpl_start:"Start",dpl_until:"Tot",dpl_planned:"Gepland",dpl_done_by:"Klaar om",
@@ -344,6 +368,24 @@ TR.nl = {
  prog_tip_blocks:"Totaal aantal voltooide focussessies.",
  prog_tip_focus:"Totale tijd dat je gefocust hebt gestudeerd.",
  prog_tip_streak:"Opeenvolgende studie-dagen. Hou het vol!",
+ // Agenda
+ agenda_title:"Agenda",agenda_back:"Terug",agenda_add_exam:"+ Examen",
+ agenda_exam_lbl:"Examen",agenda_plan_lbl:"Studieplan",agenda_no_events:"Geen events op deze dag.",
+ agenda_plan_day:"Plan deze dag",agenda_edit_day:"Plan aanpassen",
+ exam_add_t:"Examen toevoegen",exam_subject:"Vak / Cursus",exam_date:"Datum",exam_time:"Tijdstip (optioneel)",exam_note:"Notitie",
+ exam_save:"Opslaan",exam_delete:"Verwijderen",
+ agenda_today:"Vandaag",agenda_days_left:"{n} dagen",agenda_tomorrow:"Morgen",
+ agenda_plan_d:"Bekijk je examendatums en plan studiedagen vooruit.",
+ mot_1:"Je hoeft niet de hele dag te studeren. Een paar gefocuste uren klopt een hele afleidende dag.",
+ mot_2:"Elk blok dat je afmaakt brengt je dichterbij. Ga door.",
+ mot_3:"Vooruitgang, niet perfectie. Één sessie tegelijk.",
+ mot_4:"Je bouwt aan iets echts — blok voor blok.",
+ mot_5:"Begin. Dat is altijd het moeilijkste deel.",
+ tip_sleep:"😴 Slaap is wanneer je brein verwerkt wat je geleerd hebt. Niet overslaan.",
+ tip_pomodoro:"🍅 Korte gefocuste sessies kloppen lange ongeconcentreerde altijd.",
+ tip_plan:"📋 Een goed plan vermindert stress. Je hebt al het moeilijkste gedaan.",
+ tip_break:"🚶 Loop even rond in je pauze — het herstelt je focus.",
+ tip_phone:"📵 Telefoon omgekeerd = minder onderbrekingen = sneller klaar.",
 };
 TR.fr = {
  back:"Retour",next:"Suivant",continue:"Continuer",done:"Terminé",cancel:"Annuler",save:"Enregistrer",add:"Ajouter",skip:"Passer",
@@ -467,6 +509,24 @@ TR.fr = {
  prog_tip_blocks:"Nombre total de sessions de focus terminées.",
  prog_tip_focus:"Temps total passé à te concentrer.",
  prog_tip_streak:"Jours d'étude consécutifs. Continue !",
+ // Agenda
+ agenda_title:"Agenda",agenda_back:"Retour",agenda_add_exam:"+ Examen",
+ agenda_exam_lbl:"Examen",agenda_plan_lbl:"Plan d'étude",agenda_no_events:"Aucun événement ce jour.",
+ agenda_plan_day:"Planifier ce jour",agenda_edit_day:"Modifier le plan",
+ exam_add_t:"Ajouter un examen",exam_subject:"Matière / Cours",exam_date:"Date",exam_time:"Heure (optionnel)",exam_note:"Note",
+ exam_save:"Enregistrer",exam_delete:"Supprimer",
+ agenda_today:"Aujourd'hui",agenda_days_left:"{n} jours",agenda_tomorrow:"Demain",
+ agenda_plan_d:"Consulte tes dates d'examens et planifie tes journées d'étude à l'avance.",
+ mot_1:"Tu n'as pas besoin d'étudier toute la journée. Quelques heures concentrées valent mieux qu'une journée distraite.",
+ mot_2:"Chaque bloc terminé te rapproche du but. Continue.",
+ mot_3:"Progression, pas perfection. Une session à la fois.",
+ mot_4:"Tu construis quelque chose de réel — bloc par bloc.",
+ mot_5:"Commence. C'est toujours la partie la plus difficile.",
+ tip_sleep:"😴 Le sommeil consolide ce que tu as étudié. Ne le néglige pas.",
+ tip_pomodoro:"🍅 De courtes sessions concentrées battent les longues sessions dispersées.",
+ tip_plan:"📋 Un plan clair réduit le stress. Tu as déjà fait le plus dur.",
+ tip_break:"🚶 Marche pendant ta pause — ça remet le focus.",
+ tip_phone:"📵 Téléphone face cachée = moins d'interruptions = plus vite fini.",
 };
 TR.es = {
  back:"Atrás",next:"Siguiente",continue:"Continuar",done:"Listo",cancel:"Cancelar",save:"Guardar",add:"Añadir",skip:"Saltar",
@@ -590,6 +650,24 @@ TR.es = {
  prog_tip_blocks:"Número total de sesiones de enfoque completadas.",
  prog_tip_focus:"Tiempo total que has pasado concentrado.",
  prog_tip_streak:"Días de estudio consecutivos. ¡Sigue así!",
+ // Agenda
+ agenda_title:"Agenda",agenda_back:"Atrás",agenda_add_exam:"+ Examen",
+ agenda_exam_lbl:"Examen",agenda_plan_lbl:"Plan de estudio",agenda_no_events:"Sin eventos este día.",
+ agenda_plan_day:"Planificar este día",agenda_edit_day:"Editar plan",
+ exam_add_t:"Añadir examen",exam_subject:"Materia / Curso",exam_date:"Fecha",exam_time:"Hora (opcional)",exam_note:"Nota",
+ exam_save:"Guardar",exam_delete:"Eliminar",
+ agenda_today:"Hoy",agenda_days_left:"{n} días",agenda_tomorrow:"Mañana",
+ agenda_plan_d:"Consulta tus fechas de examen y planifica tus días de estudio con antelación.",
+ mot_1:"No necesitas estudiar todo el día. Unas pocas horas concentradas superan un día distraído.",
+ mot_2:"Cada bloque que completas te acerca más. Sigue adelante.",
+ mot_3:"Progreso, no perfección. Una sesión a la vez.",
+ mot_4:"Estás construyendo algo real — bloque a bloque.",
+ mot_5:"Empieza. Esa es siempre la parte más difícil.",
+ tip_sleep:"😴 El sueño consolida lo que estudiaste. No lo saltes.",
+ tip_pomodoro:"🍅 Las sesiones cortas y concentradas siempre superan las largas y dispersas.",
+ tip_plan:"📋 Un plan claro reduce el estrés. Ya hiciste la parte difícil.",
+ tip_break:"🚶 Camina durante tu descanso — eso restablece tu enfoque.",
+ tip_phone:"📵 Teléfono boca abajo = menos interrupciones = más rápido.",
 };
 TR.ro = {
  back:"Înapoi",next:"Următorul",continue:"Continuă",done:"Gata",cancel:"Anulează",save:"Salvează",add:"Adaugă",skip:"Sari",
@@ -713,6 +791,24 @@ TR.ro = {
  prog_tip_blocks:"Numărul total de sesiuni de focus completate.",
  prog_tip_focus:"Timpul total petrecut concentrat.",
  prog_tip_streak:"Zile consecutive de studiu. Continuă!",
+ // Agenda
+ agenda_title:"Agendă",agenda_back:"Înapoi",agenda_add_exam:"+ Examen",
+ agenda_exam_lbl:"Examen",agenda_plan_lbl:"Plan de studiu",agenda_no_events:"Niciun eveniment în această zi.",
+ agenda_plan_day:"Planifică ziua",agenda_edit_day:"Editează planul",
+ exam_add_t:"Adaugă examen",exam_subject:"Materie / Curs",exam_date:"Dată",exam_time:"Oră (opțional)",exam_note:"Notă",
+ exam_save:"Salvează",exam_delete:"Elimină",
+ agenda_today:"Azi",agenda_days_left:"{n} zile",agenda_tomorrow:"Mâine",
+ agenda_plan_d:"Vezi datele examenelor tale și planifică zile de studiu în avans.",
+ mot_1:"Nu trebuie să înveți toată ziua. Câteva ore concentrate bat o zi întreagă distrasă.",
+ mot_2:"Fiecare bloc terminat te apropie mai mult. Continuă.",
+ mot_3:"Progres, nu perfecție. O sesiune pe rând.",
+ mot_4:"Construiești ceva real — bloc cu bloc.",
+ mot_5:"Începe. Asta e întotdeauna partea cea mai grea.",
+ tip_sleep:"😴 Somnul consolidează ce ai studiat. Nu-l sări.",
+ tip_pomodoro:"🍅 Sesiunile scurte și concentrate bat mereu pe cele lungi și nefocusate.",
+ tip_plan:"📋 Un plan clar reduce stresul. Ai făcut deja partea grea.",
+ tip_break:"🚶 Mergi puțin în pauză — îți resetează focusul.",
+ tip_phone:"📵 Telefon cu fața în jos = mai puține întreruperi = mai repede gata.",
 };
 
 /* ---- translate helpers ---- */

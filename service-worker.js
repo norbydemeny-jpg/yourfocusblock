@@ -1,13 +1,14 @@
 /* ══════════════════════════════════════════════════════
    FocusBlock — service-worker.js
-   Cache-first strategy. Cache version: focusblock-v1.
+   Cache-first strategy. Cache version: focusblock-v2.
    ══════════════════════════════════════════════════════ */
 
-const CACHE = 'focusblock-v1';
+const CACHE = 'focusblock-v2';
 
 const PRECACHE = [
   './',
   './index.html',
+  './manifest.json',
   './css/base.css',
   './css/themes.css',
   './css/layout.css',
@@ -23,7 +24,9 @@ const PRECACHE = [
   './js/planner.js',
   './js/progress.js',
   './js/settings.js',
-  './js/app.js'
+  './js/app.js',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png'
 ];
 
 /* ── Install: pre-cache all shell assets ─────────────── */

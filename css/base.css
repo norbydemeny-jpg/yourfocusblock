@@ -137,3 +137,16 @@ select            { font-family: var(--ff); }
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
 }
+
+@keyframes attentionPulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent); transform: scale(1); }
+  50%  { box-shadow: 0 0 0 18px color-mix(in srgb, var(--accent) 0%, transparent); transform: scale(1.05); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent); transform: scale(1); }
+}
+@keyframes gentleShake {
+  0%, 100% { transform: translateX(0); }
+  20%  { transform: translateX(-4px); }
+  40%  { transform: translateX(4px); }
+  60%  { transform: translateX(-3px); }
+  80%  { transform: translateX(3px); }
+}

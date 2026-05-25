@@ -14,6 +14,7 @@ function buildPayload(){
     companionTone:S.companionTone, companionSound:S.companionSound,
     streak, lastDay, lifetimeBlocks, lifetimeMins, lifetimeFocusPoints, houseProgress,
     history, subjectTotals,
+    examDates, dayPlans,
     // active day (so refresh mid-session doesn't lose the day)
     activeDay: blocks.length ? {
       date:studyDayStr(), blocks, curBlock, curPhase, timeLeft, totalTime,
@@ -84,6 +85,8 @@ function applyLoaded(d){
   lifetimeFocusPoints = d.lifetimeFocusPoints || 0; houseProgress = d.houseProgress || 0;
   history = Array.isArray(d.history) ? d.history : [];
   subjectTotals = d.subjectTotals || {};
+  examDates = Array.isArray(d.examDates) ? d.examDates : [];
+  dayPlans = (d.dayPlans && typeof d.dayPlans === 'object') ? d.dayPlans : {};
   // restore active day — uses studyDayStr (4am boundary) so sessions past midnight still restore
   if(d.activeDay && d.activeDay.date === studyDayStr() && Array.isArray(d.activeDay.blocks) && d.activeDay.blocks.length){
     const a = d.activeDay;

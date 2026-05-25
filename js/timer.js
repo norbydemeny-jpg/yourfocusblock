@@ -43,6 +43,7 @@ function manualPhase(ph){
 
 function startTimer(){
   if(running || timeLeft <= 0) return;
+  document.getElementById('app').classList.remove('break-done');
   running = true;
   requestNotifPerm();
   endTimestamp = Date.now() + timeLeft * 1000;
@@ -194,6 +195,7 @@ function advanceAfterBreak(){
   const nextIdx = blocks.findIndex(b => !b.done && !b.skipped);
   if(nextIdx < 0){ finalizeDayHistory(); showRecap(); return; }
   curBlock = nextIdx; setPhase('focus', true);
+  setTimeout(() => { document.getElementById('app').classList.add('break-done'); }, 100);
   renderApp();
 }
 
@@ -255,7 +257,19 @@ function extendTimer(mins){
 /* ---- motivational text ---- */
 function updateMotiv(){
   const el = document.getElementById('motiv');
-  if(S.companionTone === 'minimal' || curPhase !== 'focus'){ el.classList.remove('show'); el.textContent = ''; return; }
+  if(S.companionTone === 'minimal'){ el.classList.remove('show'); el.textContent = ''; return; }
+  if(curPhase !== 'focus'){
+    // Show wellbeing tip during breaks
+    if(S.tips){
+      const tipKeys = ['tip_sleep','tip_pomodoro','tip_plan','tip_break','tip_phone','tip_water','tip_eyes','tip_stretch','tip_breath','tip_walk'];
+      const tipIdx = (Math.floor(Date.now() / 60000)) % tipKeys.length;
+      el.textContent = T(tipKeys[tipIdx]);
+      requestAnimationFrame(() => el.classList.add('show'));
+    } else {
+      el.classList.remove('show'); el.textContent = '';
+    }
+    return;
+  }
   let key = 'm_ready';
   if(running){
     const frac = totalTime > 0 ? (totalTime - timeLeft) / totalTime : 0;

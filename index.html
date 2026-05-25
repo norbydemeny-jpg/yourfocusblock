@@ -36,7 +36,10 @@
       <div class="logo"><div class="logo-dot"></div>FocusBlock</div>
       <div class="home-top-actions">
         <div class="home-streak" id="homeStreak" onclick="goProgress()" style="display:none;"><span>🔥</span><span id="homeStreakNum">0</span></div>
-        <button class="prog-chip" id="homeProgBtn" onclick="goProgress()" title="Progress" style="display:none;"><span class="pc-icon">📊</span><span class="pc-label">Progress</span></button>
+        <button class="prog-chip" id="homeProgBtn" onclick="goProgress()" style="display:none;">
+          <svg class="pc-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="4" y1="16" x2="4" y2="10"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="2"/></svg>
+          <span class="pc-label">Voortgang</span>
+        </button>
         <button class="icon-btn" onclick="openSettings()" title="Settings">⚙</button>
       </div>
     </div>
@@ -47,6 +50,7 @@
     </div>
     <div class="cards fade-in" id="startCards"></div>
     <div class="home-foot-note" id="homeFootNote"></div>
+    <div class="home-motiv" id="homeMotiv"></div>
   </div>
 </div>
 
@@ -73,11 +77,11 @@
     <div class="planner-stats" id="plnStats">
       <div class="ps-item" id="psStart">
         <div class="ps-lbl" id="psStartLbl">Start</div>
-        <div class="ps-val"><input type="time" id="plnStartInput" onchange="onPlnStartChange()" /></div>
+        <div class="ps-val"><input type="time" id="plnStartInput" oninput="onPlnStartChange()" /></div>
       </div>
       <div class="ps-item" id="psUntil">
         <div class="ps-lbl" id="psUntilLbl">Until</div>
-        <div class="ps-val"><input type="time" id="plnEndInput" onchange="onPlnEndChange()" /></div>
+        <div class="ps-val"><input type="time" id="plnEndInput" oninput="onPlnEndChange()" /></div>
       </div>
       <div class="ps-item">
         <div class="ps-lbl" id="psPlannedLbl">Planned</div>
@@ -102,6 +106,35 @@
     <div class="planner-foot">
       <button class="planner-start-btn" id="plnStartBtn" onclick="startFromPlanner()">▶ Start planning</button>
     </div>
+  </div>
+</div>
+
+<!-- ════════ AGENDA ════════ -->
+<div class="screen out" id="agenda">
+  <div class="agenda-wrap">
+    <div class="agenda-head">
+      <button class="agenda-back-btn" onclick="backFromAgenda()" id="agendaBackLbl">← Terug</button>
+      <div class="agenda-title" id="agendaTitleEl">Agenda</div>
+      <button class="agenda-add-btn" onclick="openExamModal()" id="agendaAddBtn">+ Examen</button>
+    </div>
+    <div class="agenda-nav">
+      <button class="agenda-nav-btn" onclick="agendaNavMonth(-1)">‹</button>
+      <div class="agenda-month-lbl" id="agendaMonthLbl"></div>
+      <button class="agenda-nav-btn" onclick="agendaNavMonth(1)">›</button>
+    </div>
+    <div class="agenda-cal" id="agendaCal"></div>
+    <div class="agenda-day-detail" id="agendaDayDetail"></div>
+  </div>
+</div>
+
+<!-- Exam add/edit modal -->
+<div class="modal-ov" id="examOv">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="examModalTitle">Examen toevoegen</div>
+      <button class="modal-x" onclick="closeExamModal()">✕</button>
+    </div>
+    <div class="modal-body" id="examModalBody"></div>
   </div>
 </div>
 

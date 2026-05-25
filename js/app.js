@@ -8,7 +8,7 @@
 let _restoredDay = false;
 
 /* ====================== SCREEN ROUTER ====================== */
-const SCREENS = ['home','flow','planner','app','progress'];
+const SCREENS = ['home','flow','planner','agenda','app','progress'];
 function showScreen(id){
   SCREENS.forEach(s => {
     const el = document.getElementById(s);
@@ -56,6 +56,7 @@ function applyLang(){
   if(document.getElementById('home').style.display !== 'none') renderHome();
   if(document.getElementById('flow').style.display !== 'none' && flowSteps.length) renderFlowStep();
   if(document.getElementById('planner').style.display !== 'none') renderPlanner();
+  if(document.getElementById('agenda').style.display !== 'none') renderAgenda();
   if(document.getElementById('app').style.display !== 'none' && blocks.length) renderApp();
   if(document.getElementById('progress').style.display !== 'none') renderProgress();
   if(document.getElementById('settingsOv').classList.contains('open')) renderSettings();
@@ -67,6 +68,11 @@ function renderHome(){
   document.getElementById('homeGreet').textContent = userName ? Tf('home_greet', {name:userName}) : T('home_greet_new');
   document.getElementById('homeSub').textContent = T('home_sub');
   document.getElementById('homeFootNote').textContent = T('home_foot');
+  // Rotating motivational message (cycles daily)
+  const motKeys = ['mot_1','mot_2','mot_3','mot_4','mot_5'];
+  const motIdx = new Date().getDate() % motKeys.length;
+  const motEl = document.getElementById('homeMotiv');
+  if(motEl) motEl.textContent = T(motKeys[motIdx]);
   document.getElementById('homeStreakNum').textContent = streak;
   document.getElementById('homeStreak').style.display = streak > 0 ? 'flex' : 'none';
 
@@ -78,16 +84,17 @@ function renderHome(){
     // Update chip label: streak if active, else session count, else static label
     const lblEl = progBtn.querySelector('.pc-label');
     if(lblEl){
-      if(streak > 1) lblEl.textContent = '🔥 ' + streak;
-      else if(lifetimeBlocks > 0) lblEl.textContent = lifetimeBlocks + ' ' + T('db_done').replace('{n}','').trim();
+      if(streak > 0) lblEl.textContent = streak + (streak === 1 ? ' dag' : ' dagen') + ' 🔥';
+      else if(lifetimeBlocks > 0) lblEl.textContent = lifetimeBlocks + ' sessies';
       else lblEl.textContent = T('prog_open');
     }
   }
 
-  // cards: Snelle blokken, Dagplanning, (Doorgaan met last plan)
+  // cards: Snelle blokken, Dagplanning, Agenda, (Doorgaan met last plan)
   const cards = [
     {m:'blocks', t:'card_blocks_t', d:'card_blocks_d', tag:'card_blocks_tag'},
-    {m:'day', t:'card_day_t', d:'card_day_d', tag:'card_day_tag'},
+    {m:'day',    t:'card_day_t',    d:'card_day_d',    tag:'card_day_tag'},
+    {m:'agenda', t:'agenda_title',  d:'agenda_plan_d', tag:''},
   ];
   if(lastPlan && lastPlan.blocks && lastPlan.blocks.length) cards.push({m:'last', t:'card_last_t', d:'card_last_d', tag:'card_last_tag'});
 
@@ -679,6 +686,269 @@ function shareInvite(){
 function closeInvite(){
   const ov = document.getElementById('inviteOv');
   if(ov) ov.classList.remove('open');
+}
+
+/* ══════════════════════════════════════════════════════
+   AGENDA
+   ══════════════════════════════════════════════════════ */
+
+function goAgenda(){
+  if(!agendaViewDate) agendaViewDate = new Date();
+  renderAgenda();
+  showScreen('agenda');
+}
+
+function backFromAgenda(){
+  if(blocks.length){ showScreen('app'); renderApp(); }
+  else { showScreen('home'); renderHome(); }
+}
+
+function agendaNavMonth(dir){
+  if(!agendaViewDate) agendaViewDate = new Date();
+  agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
+  renderAgenda();
+}
+
+function renderAgenda(){
+  if(!agendaViewDate) agendaViewDate = new Date();
+  const d = agendaViewDate;
+
+  // Header labels
+  document.getElementById('agendaBackLbl').textContent = '← ' + T('agenda_back');
+  document.getElementById('agendaTitleEl').textContent = T('agenda_title');
+  document.getElementById('agendaAddBtn').textContent = T('agenda_add_exam');
+
+  // Month label
+  const monthLbl = d.toLocaleDateString(S.lang === 'en' ? 'en-US' : S.lang, {month:'long', year:'numeric'});
+  document.getElementById('agendaMonthLbl').textContent = monthLbl.charAt(0).toUpperCase() + monthLbl.slice(1);
+
+  // Calendar grid
+  const cal = document.getElementById('agendaCal');
+  cal.innerHTML = '';
+
+  const year = d.getFullYear(), month = d.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay  = new Date(year, month + 1, 0);
+  const today = todayStr();
+
+  // Day-of-week headers (Mon-Sun)
+  const dayNames = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  if(S.lang === 'en') { dayNames.splice(0, 7, 'Mo','Tu','We','Th','Fr','Sa','Su'); }
+  else if(S.lang === 'fr') { dayNames.splice(0, 7, 'Lu','Ma','Me','Je','Ve','Sa','Di'); }
+  else if(S.lang === 'es') { dayNames.splice(0, 7, 'Lu','Ma','Mi','Ju','Vi','Sá','Do'); }
+  else if(S.lang === 'ro') { dayNames.splice(0, 7, 'Lu','Ma','Mi','Jo','Vi','Sâ','Du'); }
+  dayNames.forEach(n => {
+    const h = document.createElement('div');
+    h.className = 'cal-hdr'; h.textContent = n;
+    cal.appendChild(h);
+  });
+
+  // Start offset (Mon=0)
+  let startOffset = (firstDay.getDay() + 6) % 7;
+  for(let i = 0; i < startOffset; i++){
+    const blank = document.createElement('div'); blank.className = 'cal-day cal-blank'; cal.appendChild(blank);
+  }
+
+  for(let day = 1; day <= lastDay.getDate(); day++){
+    const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    if(dateStr === today) cell.classList.add('cal-today');
+
+    const exams = examDates.filter(e => e.date === dateStr);
+    const hasPlan = !!dayPlans[dateStr];
+    const histEntry = history.find(h => h.date === dateStr);
+
+    let dots = '';
+    if(exams.length) dots += '<span class="cal-dot exam"></span>';
+    if(hasPlan || histEntry) dots += '<span class="cal-dot plan"></span>';
+
+    cell.innerHTML = `<span class="cal-day-num">${day}</span>${dots ? '<div class="cal-dots">' + dots + '</div>' : ''}`;
+    cell.onclick = () => showAgendaDay(dateStr);
+    cal.appendChild(cell);
+  }
+
+  // Show today's detail by default
+  showAgendaDay(today);
+}
+
+let _agendaSelectedDay = null;
+function showAgendaDay(dateStr){
+  _agendaSelectedDay = dateStr;
+  const detail = document.getElementById('agendaDayDetail');
+  const exams = examDates.filter(e => e.date === dateStr);
+  const plan = dayPlans[dateStr];
+  const histEntry = history.find(h => h.date === dateStr);
+
+  const d = new Date(dateStr + 'T12:00:00');
+  const today = todayStr();
+  const diffDays = Math.round((d - new Date(today + 'T12:00:00')) / 86400000);
+  let dayLbl = '';
+  if(diffDays === 0) dayLbl = T('agenda_today');
+  else if(diffDays === 1) dayLbl = T('agenda_tomorrow');
+  else if(diffDays > 1) dayLbl = Tf('agenda_days_left', {n: diffDays});
+  else dayLbl = Math.abs(diffDays) + (S.lang === 'nl' ? ' dagen geleden' : ' days ago');
+
+  const dayName = d.toLocaleDateString(S.lang === 'en' ? 'en-US' : S.lang, {weekday:'long', day:'numeric', month:'long'});
+
+  let html = `<div class="agenda-day-title">
+    <span class="agenda-day-name">${dayName}</span>
+    <span class="agenda-day-rel">${dayLbl}</span>
+  </div>`;
+
+  // Exams
+  if(exams.length){
+    html += `<div class="agenda-section-lbl">${T('agenda_exam_lbl')}</div>`;
+    exams.forEach(ex => {
+      const col = ex.color || '#f87171';
+      html += `<div class="agenda-exam-card" style="border-left-color:${col}">
+        <div class="agenda-exam-name">${esc(ex.subject)}</div>
+        ${ex.time ? `<div class="agenda-exam-time">🕐 ${esc(ex.time)}</div>` : ''}
+        ${ex.note ? `<div class="agenda-exam-note">${esc(ex.note)}</div>` : ''}
+        <button class="agenda-exam-del" onclick="deleteExam('${ex.id}')">✕</button>
+      </div>`;
+    });
+  }
+
+  // History / plan
+  if(histEntry){
+    html += `<div class="agenda-section-lbl">${T('agenda_plan_lbl')}</div>
+      <div class="agenda-hist-card">✓ ${fmtDur(histEntry.mins)} ${S.lang === 'nl' ? 'gestudeerd' : 'studied'}</div>`;
+  } else if(plan){
+    html += `<div class="agenda-section-lbl">${T('agenda_plan_lbl')}</div>`;
+    plan.forEach(b => {
+      html += `<div class="agenda-plan-row"><span class="agenda-plan-dot" style="background:${b.isPause ? 'var(--muted)' : colorFor(b.subject || '')}"></span>${esc(b.isPause ? T('dpl_type_pause') : (b.subject || T('dpl_type_focus')))} · ${fmtDur(b.mins)}</div>`;
+    });
+    html += `<button class="agenda-plan-btn" onclick="editDayPlan('${dateStr}')">${T('agenda_edit_day')}</button>`;
+    html += `<button class="agenda-del-plan-btn" onclick="deleteDayPlan('${dateStr}')">✕ ${S.lang === 'nl' ? 'Plan verwijderen' : 'Remove plan'}</button>`;
+  } else if(diffDays >= 0) {
+    if(!exams.length) html += `<div class="agenda-no-events">${T('agenda_no_events')}</div>`;
+    html += `<button class="agenda-plan-btn" onclick="planFromAgenda('${dateStr}')">${T('agenda_plan_day')}</button>`;
+  } else {
+    if(!exams.length) html += `<div class="agenda-no-events">${T('agenda_no_events')}</div>`;
+  }
+
+  detail.innerHTML = html;
+
+  // Highlight selected day
+  document.querySelectorAll('.cal-day').forEach(el => el.classList.remove('cal-selected'));
+}
+
+function planFromAgenda(dateStr){
+  // Open planner pre-set for that date; save plan back to dayPlans[dateStr]
+  D.bb = [];
+  plannerStartTime = '09:00';
+  plannerEndTime = '';
+  plannerMode = 'full';
+  // After startFromPlanner, we'll save to dayPlans instead of starting immediately
+  _planningForDate = dateStr;
+  renderPlanner();
+  showScreen('planner');
+}
+
+function editDayPlan(dateStr){
+  D.bb = (dayPlans[dateStr] || []).map(b => ({...b, done:false, tasks:b.tasks||[]}));
+  plannerStartTime = '09:00';
+  plannerMode = 'full';
+  _planningForDate = dateStr;
+  renderPlanner();
+  showScreen('planner');
+}
+
+function deleteDayPlan(dateStr){
+  delete dayPlans[dateStr];
+  saveData();
+  showAgendaDay(dateStr);
+}
+
+/* ---- Exam modal ---- */
+let _editingExamId = null;
+function openExamModal(examId){
+  _editingExamId = examId || null;
+  const ex = examId ? examDates.find(e => e.id === examId) : null;
+  document.getElementById('examModalTitle').textContent = T('exam_add_t');
+  const body = document.getElementById('examModalBody');
+
+  const subjectChips = subjects.length ? subjects.map(s =>
+    `<button class="bd-subj-chip${ex && ex.subject === s.name ? ' active' : ''}" onclick="examPickSubj('${s.name.replace(/'/g,"\\'")}');return false;">${esc(s.name)}</button>`
+  ).join('') : '';
+
+  const examColors = ['#f87171','#fb923c','#facc15','#4ade80','#60a5fa','#c084fc'];
+  const colorPicker = examColors.map(c =>
+    `<button class="exam-color-dot${ex && ex.color === c ? ' active' : ''}" style="background:${c}" onclick="examPickColor('${c}');return false;"></button>`
+  ).join('');
+
+  body.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:1rem;padding:0 0 1rem">
+      <div>
+        <div class="bd-field-lbl">${T('exam_subject')}</div>
+        ${subjectChips ? `<div class="bd-subj-chips" style="margin-bottom:8px">${subjectChips}</div>` : ''}
+        <input class="bd-subj-input" id="examSubjInput" type="text" placeholder="${T('exam_subject')}" value="${esc(ex ? ex.subject : '')}" oninput="examSubjChange(this.value)">
+      </div>
+      <div>
+        <div class="bd-field-lbl">${T('exam_date')}</div>
+        <input class="bd-subj-input" id="examDateInput" type="date" value="${ex ? ex.date : todayStr()}">
+      </div>
+      <div>
+        <div class="bd-field-lbl">${T('exam_time')}</div>
+        <input class="bd-subj-input" id="examTimeInput" type="time" value="${ex ? (ex.time||'') : ''}">
+      </div>
+      <div>
+        <div class="bd-field-lbl">${T('exam_note')}</div>
+        <input class="bd-subj-input" id="examNoteInput" type="text" placeholder="${T('exam_note')}" value="${esc(ex ? (ex.note||'') : '')}">
+      </div>
+      <div>
+        <div class="bd-field-lbl">Kleur</div>
+        <div class="exam-color-row" id="examColorRow">${colorPicker}</div>
+        <input type="hidden" id="examColorVal" value="${ex ? (ex.color||examColors[0]) : examColors[0]}">
+      </div>
+      <div style="display:flex;gap:10px">
+        ${ex ? `<button class="bd-delete" onclick="deleteExam('${ex.id}');closeExamModal()">${T('exam_delete')}</button>` : ''}
+        <button class="bd-save" style="flex:1" onclick="saveExamModal()">${T('exam_save')}</button>
+      </div>
+    </div>`;
+  document.getElementById('examOv').classList.add('open');
+}
+function closeExamModal(){ document.getElementById('examOv').classList.remove('open'); }
+function examPickSubj(name){
+  document.getElementById('examSubjInput').value = name;
+  document.querySelectorAll('#examModalBody .bd-subj-chip').forEach(c => c.classList.toggle('active', c.textContent === name));
+}
+function examSubjChange(v){
+  document.querySelectorAll('#examModalBody .bd-subj-chip').forEach(c => c.classList.toggle('active', c.textContent === v));
+}
+function examPickColor(c){
+  document.getElementById('examColorVal').value = c;
+  document.querySelectorAll('.exam-color-dot').forEach(d => d.classList.toggle('active', d.style.background === c || d.style.backgroundColor === c));
+}
+function saveExamModal(){
+  const subj = document.getElementById('examSubjInput').value.trim();
+  const date = document.getElementById('examDateInput').value;
+  if(!subj || !date){ banner('Vul vak en datum in.'); return; }
+  const ex = {
+    id: _editingExamId || ('ex_' + Date.now()),
+    subject: subj,
+    date,
+    time: document.getElementById('examTimeInput').value || '',
+    note: document.getElementById('examNoteInput').value.trim(),
+    color: document.getElementById('examColorVal').value || '#f87171'
+  };
+  if(_editingExamId){
+    const idx = examDates.findIndex(e => e.id === _editingExamId);
+    if(idx >= 0) examDates[idx] = ex; else examDates.push(ex);
+  } else {
+    examDates.push(ex);
+  }
+  examDates.sort((a,b) => a.date.localeCompare(b.date));
+  saveData();
+  closeExamModal();
+  renderAgenda();
+  banner(T('exam_save') + ' ✓');
+}
+function deleteExam(id){
+  examDates = examDates.filter(e => e.id !== id);
+  saveData();
+  renderAgenda();
 }
 
 // kick off
