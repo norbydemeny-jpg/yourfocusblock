@@ -113,10 +113,11 @@ function finalizeDayHistory(){
   const doneBlocks = blocks.filter(b => b.done && !b.isPause);
   if(!doneBlocks.length) return;
   const subjMap = {};
-  doneBlocks.forEach(b => { const s = b.subject || T('phase_focus'); subjMap[s] = (subjMap[s] || 0) + b.mins; });
+  const subjCount = {};
+  doneBlocks.forEach(b => { const s = b.subject || T('phase_focus'); subjMap[s] = (subjMap[s] || 0) + b.mins; subjCount[s] = (subjCount[s] || 0) + 1; });
   let h = history.find(x => x.date === t);
-  if(h){ h.blocks = doneBlocks.length; h.mins = completedMins; h.subjects = subjMap; }
-  else history.push({date:t, blocks:doneBlocks.length, mins:completedMins, subjects:subjMap});
+  if(h){ h.blocks = doneBlocks.length; h.mins = completedMins; h.subjects = subjMap; h.subjectsCount = subjCount; }
+  else history.push({date:t, blocks:doneBlocks.length, mins:completedMins, subjects:subjMap, subjectsCount:subjCount});
   // clear active day so it doesn't restore tomorrow
   blocks = []; // keep lastPlan
   saveData();

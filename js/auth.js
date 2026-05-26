@@ -7,6 +7,26 @@ import { supabase } from './supabaseClient.js';
 // ── State ──────────────────────────────────────────────
 let _currentUser     = null;
 let _pendingUsername = null; // bewaard tijdens registratie tot SIGNED_IN event
+let _myProfile       = null; // { id, username, avatar_url }
+
+// ── Avatar helpers (global) ────────────────────────────
+const _AV_COLORS = ['#c8f060','#fb7185','#67e8f9','#fcd34d','#c084fc','#6ee7b7','#f0a868','#38bdf8','#f472b6','#a3e635'];
+function fbAvatarColor(name){
+  let h = 0; const s = String(name || '?');
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
+  return _AV_COLORS[Math.abs(h) % _AV_COLORS.length];
+}
+function _avSafe(url){ return (typeof url === 'string' && /^(data:image\/|https:\/\/)/.test(url)) ? url : ''; }
+function fbAvatarHTML(name, url, size){
+  size = size || 36;
+  const safe = _avSafe(url);
+  if (safe) return `<span class="fb-av" style="width:${size}px;height:${size}px"><img src="${safe.replace(/"/g,'&quot;')}" alt="" loading="lazy"></span>`;
+  const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
+  return `<span class="fb-av fb-av-init" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px;background:${fbAvatarColor(name)};color:#0c0e06">${initial}</span>`;
+}
+window.fbAvatarHTML  = fbAvatarHTML;
+window.fbAvatarColor = fbAvatarColor;
+window.fbMyProfile   = () => _myProfile;
 
 // ── Helpers ────────────────────────────────────────────
 function generateReferralCode(username) {
@@ -237,30 +257,37 @@ function _friendlyError(msg) {
   return msg;
 }
 
-// ── Top bar auth area ───────────────────────────────────
-function updateAuthUI(user) {
-  _currentUser = user;
-  const areas = document.querySelectorAll('.auth-area');
+function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  areas.forEach(area => {
-    if (user) {
-      const initial = (user.email || '?')[0].toUpperCase();
-      area.innerHTML = `
-        <button class="auth-chip" onclick="openAuthModal()" title="Account">
-          <span class="auth-chip-dot">${initial}</span>
-          <span class="auth-chip-name" id="authChipName">…</span>
-        </button>`;
-      supabase
-        .from('profiles')
-        .select('username')
-        .eq('id', user.id)
-        .single()
-        .then(({ data }) => {
-          document.querySelectorAll('#authChipName').forEach(el => {
-            if (data) el.textContent = data.username;
-          });
-        });
-    } else {
+// ── Profiel laden / cachen ─────────────────────────────
+async function loadMyProfile(userId){
+  try {
+    const { data } = await supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
+    _myProfile = data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
+  } catch { _myProfile = { id: userId, username: '', avatar_url: '' }; }
+  return _myProfile;
+}
+
+// ── Top bar auth area ───────────────────────────────────
+function renderAuthChip(){
+  if (!_myProfile) return;
+  document.querySelectorAll('.auth-area').forEach(area => {
+    area.innerHTML = `
+      <button class="auth-chip" onclick="openSettings('profile')" title="${_esc(_myProfile.username || 'Account')}">
+        ${fbAvatarHTML(_myProfile.username, _myProfile.avatar_url, 30)}
+        <svg class="auth-chip-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="13" height="13"><path d="M6 9l6 6 6-6"/></svg>
+      </button>`;
+  });
+}
+
+async function updateAuthUI(user) {
+  _currentUser = user;
+  if (user) {
+    await loadMyProfile(user.id);
+    renderAuthChip();
+  } else {
+    _myProfile = null;
+    document.querySelectorAll('.auth-area').forEach(area => {
       area.innerHTML = `
         <button class="icon-btn" onclick="openAuthModal()" title="Inloggen / Registreren">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
@@ -268,9 +295,25 @@ function updateAuthUI(user) {
             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
           </svg>
         </button>`;
-    }
-  });
+    });
+  }
 }
+
+// ── Profiel bijwerken (gebruikersnaam / avatar) ────────
+async function updateMyProfile(fields){
+  if (!_currentUser) throw new Error('Niet ingelogd');
+  const { error } = await supabase.from('profiles').update(fields).eq('id', _currentUser.id);
+  if (error) throw error;
+  _myProfile = { ..._myProfile, ...fields };
+  renderAuthChip();
+  // ververs sociale weergaves die avatars/namen tonen
+  window.reloadFriendStatuses?.();
+  if (typeof window.renderHomeSocial === 'function') window.renderHomeSocial();
+  if (typeof window.renderOverviewSocial === 'function') window.renderOverviewSocial();
+  return _myProfile;
+}
+window.updateMyProfile = updateMyProfile;
+window.fbRefreshProfile = async () => { if (_currentUser){ await loadMyProfile(_currentUser.id); renderAuthChip(); } };
 
 // ── Auth state listener ─────────────────────────────────
 supabase.auth.onAuthStateChange(async (event, session) => {

@@ -408,8 +408,8 @@ body.lt .assign-starttime input[type=time] { color-scheme: light; }
 
 /* Quick-add row */
 .quick-add-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 0 0.3rem; }
-.quick-add-row   { display: flex; gap: 6px; padding: 0 0 0.4rem; flex-wrap: wrap; }
-.quick-add-btn   { background: var(--bg2); border: 1px solid var(--border); color: var(--muted); font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 99px; transition: all 0.18s; white-space: nowrap; min-height: 36px; }
+.quick-add-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0 0 0.4rem; }
+.quick-add-btn   { background: var(--bg2); border: 1px solid var(--border); color: var(--muted); font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 99px; transition: all 0.18s; white-space: nowrap; min-height: 36px; text-align: center; }
 .quick-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 .quick-add-btn.pause { border-color: rgba(129,140,248,0.4); color: rgba(129,140,248,0.8); }
 .quick-add-btn.pause:hover { border-color: #818cf8; color: #818cf8; }

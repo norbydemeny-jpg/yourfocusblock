@@ -8,7 +8,9 @@
 let _restoredDay = false;
 
 /* ====================== SCREEN ROUTER ====================== */
-const SCREENS = ['home','flow','planner','agenda','app','progress'];
+const SCREENS = ['home','overview','flow','planner','agenda','app','progress'];
+// which global-nav tab lights up for each screen
+const NAV_MAP = { app:'today', overview:'overview', agenda:'agenda', progress:'progress' };
 function showScreen(id){
   SCREENS.forEach(s => {
     const el = document.getElementById(s);
@@ -16,7 +18,16 @@ function showScreen(id){
     if(s === id){ el.style.display = 'flex'; requestAnimationFrame(() => el.classList.remove('out')); }
     else { el.classList.add('out'); el.style.display = 'none'; }
   });
+  // global nav: visible everywhere except the onboarding/planning flow
+  document.body.classList.toggle('nav-on', id !== 'flow');
+  setActiveNav(NAV_MAP[id] || null);
   window.scrollTo(0, 0);
+}
+
+function setActiveNav(navId){
+  document.querySelectorAll('.nav-tab, .botnav-tab').forEach(t => {
+    t.classList.toggle('on', !!navId && t.dataset.nav === navId);
+  });
 }
 
 function goHome(){
@@ -25,7 +36,18 @@ function goHome(){
   renderHome(); showScreen('home');
 }
 function goApp(){ applyPhaseClass(); showScreen('app'); renderApp(); }
-function goProgress(from){ progReturn = from || 'home'; renderProgress(); showScreen('progress'); }
+/* Vandaag — always lands on a ready-to-focus timer */
+function goToday(){
+  if(!blocks.length){
+    blocks.push({id:nid++, subject:'', mins:S.focus, note:'', tasks:[], done:false, status:null});
+    curBlock = 0; curPhase = 'focus';
+    timeLeft = S.focus * 60; totalTime = S.focus * 60;
+    saveData();
+  }
+  goApp();
+}
+function goOverview(){ renderOverview(); showScreen('overview'); }
+function goProgress(from){ progReturn = (from && from !== 'nav') ? from : 'home'; renderProgress(); showScreen('progress'); }
 
 /* ====================== APPLY: THEME / LANG / BODY ====================== */
 function applyBodyClass(){
@@ -53,12 +75,18 @@ function applyAnimLevel(){
 /* ====================== LANGUAGE (live) ====================== */
 function applyLang(){
   document.documentElement.lang = S.lang;
-  if(document.getElementById('home').style.display !== 'none') renderHome();
-  if(document.getElementById('flow').style.display !== 'none' && flowSteps.length) renderFlowStep();
-  if(document.getElementById('planner').style.display !== 'none') renderPlanner();
-  if(document.getElementById('agenda').style.display !== 'none') renderAgenda();
-  if(document.getElementById('app').style.display !== 'none' && blocks.length) renderApp();
-  if(document.getElementById('progress').style.display !== 'none') renderProgress();
+  renderNavLabels();
+  // Only re-render screens that are actually shown. Screens hide via the
+  // `out` class (inline style.display stays ""), so check the class — not
+  // style.display — to avoid rendering uninitialised screens during init.
+  const shown = id => { const el = document.getElementById(id); return el && !el.classList.contains('out'); };
+  if(shown('home')) renderHome();
+  if(shown('overview')) renderOverview();
+  if(shown('flow') && flowSteps.length) renderFlowStep();
+  if(shown('planner')) renderPlanner();
+  if(shown('agenda')) renderAgenda();
+  if(shown('app') && blocks.length) renderApp();
+  if(shown('progress')) renderProgress();
   if(document.getElementById('settingsOv').classList.contains('open')) renderSettings();
 }
 
@@ -107,6 +135,251 @@ function renderHome(){
     el.onclick = () => startMode(c.m);
     wrap.appendChild(el);
   });
+
+  renderHomeSocial();
+}
+
+/* ---- avatar helper (uses fbAvatarHTML from auth.js when available) ---- */
+function _socAv(f, size){
+  return (typeof window.fbAvatarHTML === 'function')
+    ? window.fbAvatarHTML(f.username, f.avatar_url, size)
+    : `<span class="fb-av fb-av-init" style="width:${size}px;height:${size}px">${esc((f.username||'?')[0].toUpperCase())}</span>`;
+}
+
+/* ---- Home social: who is studying / friends / motivation ---- */
+function renderHomeSocial(){
+  const host = document.getElementById('homeSocial');
+  if(!host) return;
+  const loggedIn = (typeof window.fbUserId === 'function') && window.fbUserId();
+
+  if(!loggedIn){
+    host.innerHTML = `
+      <button class="home-social" onclick="openAuthModal()">
+        <span class="hs-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <span class="hs-main"><span class="hs-title">${esc(T('home_social_add_t'))}</span><span class="hs-sub">${esc(T('home_social_login_d'))}</span></span>
+        <span class="hs-link">${esc(T('home_social_view'))} →</span>
+      </button>`;
+    return;
+  }
+
+  const active = (typeof window.getActiveFriends === 'function') ? (window.getActiveFriends() || []) : [];
+  const all    = (typeof window.getFriendList   === 'function') ? (window.getFriendList()   || []) : [];
+
+  if(!all.length){
+    host.innerHTML = `
+      <button class="home-social" onclick="openFriendsModal()">
+        <span class="hs-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <span class="hs-main"><span class="hs-title">${esc(T('home_social_add_t'))}</span><span class="hs-sub">${esc(T('home_social_add_d'))}</span></span>
+        <span class="hs-link">${esc(T('home_social_view'))} →</span>
+      </button>`;
+    return;
+  }
+
+  let title;
+  if(active.length === 1) title = Tf('home_social_one', {name: esc(active[0].username)});
+  else if(active.length > 1) title = Tf('home_social_many', {n: active.length});
+  else title = T('home_social_none');
+
+  const shown = (active.length ? active : all).slice(0, 5);
+  const more = (active.length ? active.length : all.length) - shown.length;
+
+  host.innerHTML = `
+    <button class="home-social" onclick="openFriendsModal()">
+      <span class="hs-dot ${active.length ? 'on' : ''}"></span>
+      <span class="hs-main"><span class="hs-title">${title}</span></span>
+      <span class="hs-avatars">
+        ${shown.map(f => `<span title="${esc(f.username)}">${_socAv(f, 32)}</span>`).join('')}
+        ${more > 0 ? `<span class="hs-av hs-more">+${more}</span>` : ''}
+      </span>
+      <span class="hs-link">${esc(T('home_social_view'))} →</span>
+    </button>`;
+}
+window.renderHomeSocial = renderHomeSocial;
+
+/* ====================== GLOBAL NAV LABELS ====================== */
+function renderNavLabels(){
+  const set = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  set('navTodayLbl', T('nav_today'));    set('botTodayLbl', T('nav_today'));
+  set('navOverviewLbl', T('nav_overview')); set('botOverviewLbl', T('nav_overview'));
+  set('navAgendaLbl', T('agenda_title')); set('botAgendaLbl', T('agenda_title'));
+  set('navStatsLbl', T('nav_stats'));     set('botStatsLbl', T('nav_stats_short'));
+  set('navStatsLblShort', T('nav_stats_short'));
+  const pb = document.getElementById('navPlanBtn'); if(pb) pb.textContent = '＋ ' + T('card_plan_t');
+}
+
+/* ====================== DAGOVERZICHT (overview dashboard) ====================== */
+function _hd(m){ // localized duration "4u 15m" / "4h 15m"
+  m = Math.max(0, Math.round(m));
+  const h = Math.floor(m/60), mn = m%60;
+  const hu = T('hours_short');
+  if(h && mn) return `${h}${hu} ${mn}m`;
+  if(h) return `${h}${hu} 00m`;
+  return `${mn}m`;
+}
+function _weekFocusMins(){
+  const now = new Date();
+  const ws = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  ws.setDate(ws.getDate() - ((ws.getDay() + 6) % 7)); // Monday
+  const wsStr = ws.getFullYear() + '-' + String(ws.getMonth()+1).padStart(2,'0') + '-' + String(ws.getDate()).padStart(2,'0');
+  let mins = 0;
+  history.forEach(h => { if(h.date >= wsStr && h.date !== todayStr()) mins += (h.mins || 0); });
+  return mins;
+}
+function renderOverview(){
+  const wrap = document.getElementById('ovWrap');
+  if(!wrap) return;
+
+  const todayMins = completedMins + currentSessionMins;
+  const focusBlocks = blocks.filter(b => !b.isPause);
+  const doneFocus = focusBlocks.filter(b => b.done).length;
+  const totalFocus = focusBlocks.length;
+  const blockPct = totalFocus ? Math.round((doneFocus/totalFocus)*100) : 0;
+
+  const goalH = S.weeklyGoal || 15;
+  const weekMins = _weekFocusMins() + todayMins;
+  const weekPct = Math.min(100, Math.round((weekMins/(goalH*60))*100));
+
+  const dailyTarget = Math.max(60, Math.round(goalH*60/5));
+  const ringFrac = Math.min(1, todayMins/dailyTarget);
+  const C = 2*Math.PI*82;
+  const off = C*(1-ringFrac);
+
+  let cheer;
+  if(todayMins === 0) cheer = T('ov_cheer_start');
+  else if(todayMins < 60) cheer = T('ov_cheer_good');
+  else if(ringFrac >= 1) cheer = T('ov_cheer_goal') + ' 🎉';
+  else cheer = T('ov_cheer_busy') + ' 🔥';
+
+  const d = new Date();
+  const dateStr = d.toLocaleDateString(S.lang === 'en' ? 'en-US' : S.lang, {weekday:'long', day:'numeric', month:'long'});
+
+  // tip (rotates daily)
+  const tipKeys = ['tip_sleep','tip_pomodoro','tip_plan','tip_break','tip_phone'];
+  const tipTxt = T(tipKeys[d.getDate() % tipKeys.length]);
+
+  // timeline
+  let tlHtml = '';
+  if(blocks.length){
+    let mins = _parseTime(plannerStartTime);
+    if(mins == null) mins = d.getHours()*60 + d.getMinutes();
+    let focusNum = 0;
+    blocks.forEach((b, i) => {
+      const isPause = !!b.isPause;
+      if(!isPause) focusNum++;
+      const hh = String(Math.floor(mins/60)%24).padStart(2,'0');
+      const mm = String(mins%60).padStart(2,'0');
+      const cls = `ov-tl-block${isPause ? ' is-pause' : ''}${b.done ? ' is-done' : ''}${(i===curBlock && !b.done) ? ' is-cur' : ''}`;
+      const badge = isPause ? '☕' : focusNum;
+      const name = isPause ? T('dpl_type_pause') : (b.subject || T('phase_focus'));
+      const meta = `${b.mins} min · ${isPause ? T('break_word') : T('phase_focus')}`;
+      tlHtml += `
+        <div class="${cls}">
+          <div class="ov-tl-rail"><div class="ov-tl-dot"></div><div class="ov-tl-line"></div></div>
+          <button class="ov-tl-card" onclick="ovOpenBlock(${i})">
+            <div class="ov-tl-badge">${badge}</div>
+            <div class="ov-tl-info"><div class="ov-tl-name">${esc(name)}</div><div class="ov-tl-meta">${esc(meta)}</div></div>
+            <div class="ov-tl-time">${hh}:${mm}</div>
+            <div class="ov-tl-check">${b.done ? '✓' : ''}</div>
+          </button>
+        </div>`;
+      mins += b.mins;
+    });
+    tlHtml += `<button class="ov-add-block" onclick="ovAddBlock()">${esc(T('add_session'))}</button>`;
+  } else {
+    tlHtml = `
+      <div class="ov-empty">
+        <div class="ov-empty-title">${esc(T('ov_empty_t'))}</div>
+        <div class="ov-empty-sub">${esc(T('ov_empty_d'))}</div>
+        <button class="ov-plan-btn" onclick="startMode('day')">${esc(T('card_plan_t'))}</button>
+      </div>`;
+  }
+
+  wrap.innerHTML = `
+    <div class="ov-left fade-in">
+      <div>
+        <div class="ov-head-title">${esc(T('nav_overview'))}</div>
+        <div class="ov-head-date">${esc(dateStr)}</div>
+      </div>
+      <div class="ov-ring-card">
+        <div class="ov-ring-lbl">${esc(T('ov_total_today'))}</div>
+        <div class="ov-ring-wrap">
+          <svg viewBox="0 0 190 190"><circle class="ov-ring-bg" cx="95" cy="95" r="82" stroke-width="12"/><circle class="ov-ring-fg" cx="95" cy="95" r="82" stroke-width="12" stroke-dasharray="${C}" stroke-dashoffset="${C}" id="ovRingFg"/></svg>
+          <div class="ov-ring-center"><div class="ov-ring-big">${_hd(todayMins)}</div><div class="ov-ring-cheer">${esc(cheer)}</div></div>
+        </div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-card-head"><span class="ov-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M12 2v10l7 4"/></svg></span><span class="ov-card-title">${esc(T('ov_progress'))}</span></div>
+        <div class="ov-card-row"><span class="ov-card-val">${doneFocus} / ${totalFocus} <em>${esc(T('ov_blocks_planned'))}</em></span><span class="ov-card-pct">${blockPct}%</span></div>
+        <div class="ov-bar"><div class="ov-bar-fill" style="width:0%" data-w="${blockPct}"></div></div>
+      </div>
+      <div class="ov-card">
+        <div class="ov-card-head"><span class="ov-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span class="ov-card-title">${esc(T('ov_week_goal'))}</span></div>
+        <div class="ov-card-row"><span class="ov-card-val">${_hd(weekMins)} <em>${esc(T('ov_of'))} ${goalH}${esc(T('hours_short'))}</em></span><span class="ov-card-pct">${weekPct}%</span></div>
+        <div class="ov-bar"><div class="ov-bar-fill" style="width:0%" data-w="${weekPct}"></div></div>
+      </div>
+      <div class="ov-card ov-tip-card">
+        <span class="ov-tip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.1h6c0-.8.4-1.6 1-2.1A7 7 0 0 0 12 2z"/></svg></span>
+        <div><div class="ov-tip-title">${esc(T('ov_tips_today'))}</div><div class="ov-tip-text">${esc(tipTxt)}</div></div>
+      </div>
+    </div>
+
+    <div class="ov-right fade-in">
+      <div class="ov-right-head">
+        <div class="ov-right-title">${esc(T('ov_today'))}</div>
+        <div class="ov-right-actions">
+          <button class="ov-quick-btn" onclick="startMode('blocks')">⚡ ${esc(T('card_blocks_t'))}</button>
+          <button class="ov-plan-btn" onclick="startMode('day')">＋ ${esc(T('card_plan_t'))}</button>
+        </div>
+      </div>
+      <div class="ov-timeline">${tlHtml}</div>
+      <div class="ov-social" id="ovSocial"></div>
+    </div>`;
+
+  // animate bars + ring
+  requestAnimationFrame(() => {
+    const fg = document.getElementById('ovRingFg'); if(fg) fg.setAttribute('stroke-dashoffset', off);
+    wrap.querySelectorAll('.ov-bar-fill').forEach(el => { el.style.width = (el.dataset.w||0) + '%'; });
+  });
+
+  renderOverviewSocial();
+}
+
+function _parseTime(t){
+  if(!t || !/^\d{1,2}:\d{2}$/.test(t)) return null;
+  const [h,m] = t.split(':').map(Number);
+  return h*60 + m;
+}
+
+function renderOverviewSocial(){
+  const host = document.getElementById('ovSocial');
+  if(!host) return;
+  const friends = (typeof window.getActiveFriends === 'function') ? window.getActiveFriends() : [];
+  if(!friends || !friends.length){
+    host.innerHTML = `<div class="ov-social-title">${esc(T('ov_together'))}</div><div class="ov-social-empty">${esc(T('ov_no_friends_active'))}</div>`;
+    return;
+  }
+  const shown = friends.slice(0, 5);
+  const more = friends.length - shown.length;
+  host.innerHTML = `
+    <div class="ov-social-title">${esc(T('ov_together'))}</div>
+    <div class="ov-social-row">
+      <div class="ov-social-avatars">
+        ${shown.map(f => `<span title="${esc(f.username)}">${_socAv(f, 38)}</span>`).join('')}
+        ${more > 0 ? `<div class="av more">+${more}</div>` : ''}
+      </div>
+      <div class="ov-social-txt">${friends.length} ${esc(friends.length === 1 ? T('ov_friend_online') : T('ov_friends_online'))}</div>
+    </div>`;
+}
+
+function ovOpenBlock(i){
+  const b = blocks[i];
+  if(!b) return;
+  if(!b.isPause){ curBlock = i; curPhase = 'focus'; if(!running){ timeLeft = b.mins*60; totalTime = b.mins*60; } }
+  goApp();
+}
+function ovAddBlock(){
+  blocks.push({id:nid++, subject:'', mins:S.focus, note:'', tasks:[], done:false, status:null});
+  saveData(); renderOverview();
 }
 
 /* ====================== FOCUS APP RENDER ====================== */
@@ -168,6 +441,13 @@ function renderApp(){
     }
   }
   document.getElementById('addBlockBtn').textContent = T('add_session');
+  // Quick-add labels: 25 focus / 50 focus / short break / long break
+  const qaSet = (id, txt) => { const el = document.getElementById(id); if(el) el.textContent = txt; };
+  qaSet('qa25', '＋ ' + T('dpl_add_focus_25'));
+  qaSet('qa50', '＋ ' + T('dpl_add_focus_50'));
+  qaSet('qaShort', '＋ ' + T('ptab_short'));
+  qaSet('qaLong', '＋ ' + T('ptab_long'));
+  const qal = document.getElementById('quickAddLabel'); if(qal) qal.textContent = T('quick_add_lbl');
   renderBuildStrip();
   renderBlocks();
   renderZenStrip();
@@ -514,8 +794,9 @@ function addQuickBlock(mins){
   saveData(); renderApp();
 }
 
-function addQuickPause(){
-  blocks.push({id:nid++, isPause:true, mins:15, note:'', tasks:[], done:false});
+function addQuickPause(kind){
+  const mins = kind === 'long' ? (S.long || 25) : (S.short || 10);
+  blocks.push({id:nid++, isPause:true, mins, note:'', tasks:[], done:false});
   saveData(); renderApp();
 }
 
@@ -703,163 +984,377 @@ function backFromAgenda(){
   else { showScreen('home'); renderHome(); }
 }
 
+/* ══════════════════════════════════════════════════════
+   AGENDA — week + month planner (screenshot-style)
+   ══════════════════════════════════════════════════════ */
+let _agendaView = 'week'; // 'week' | 'month'
+
+function agendaSetView(v){ _agendaView = v; renderAgenda(); }
+function agendaGoToday(){ agendaViewDate = new Date(); renderAgenda(); }
+function agendaNav(dir){
+  if(!agendaViewDate) agendaViewDate = new Date();
+  if(_agendaView === 'week') agendaViewDate.setDate(agendaViewDate.getDate() + dir*7);
+  else agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
+  renderAgenda();
+}
 function agendaNavMonth(dir){
   if(!agendaViewDate) agendaViewDate = new Date();
   agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
   renderAgenda();
 }
+function agendaOpenDay(dateStr){
+  agendaViewDate = new Date(dateStr + 'T12:00:00');
+  _agendaView = 'week';
+  renderAgenda();
+}
+
+function _agIsoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function _agWeekStart(date){ const d = new Date(date); const off = (d.getDay()+6)%7; d.setDate(d.getDate()-off); d.setHours(0,0,0,0); return d; }
+function _agWeekNumber(date){
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dn = (d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-dn+3);
+  const ft = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  return 1 + Math.round(((d - ft)/86400000 - 3 + (ft.getUTCDay()+6)%7)/7);
+}
+function _getDayPlan(dateStr){
+  const p = dayPlans[dateStr]; if(!p) return null;
+  return Array.isArray(p) ? { startTime:'09:00', blocks:p } : p;
+}
+
+function _agDayItems(dateStr){
+  const items = [];
+  // exams with a time get placed on the grid
+  examDates.filter(e => e.date === dateStr).forEach(e => {
+    if(e.time && /^\d{1,2}:\d{2}$/.test(e.time)){
+      const [h,m] = e.time.split(':').map(Number);
+      const start = (h||0)*60 + (m||0);
+      items.push({ kind:'exam', startMin:start, endMin:start+120, name:e.subject, color:e.color||'#a78bfa', id:e.id, note:e.note });
+    }
+  });
+  // active blocks today, else saved dayPlan
+  let plan = null, startTime = '09:00';
+  if(dateStr === todayStr() && blocks.length){ plan = blocks; startTime = plannerStartTime || '09:00'; }
+  else { const dp = _getDayPlan(dateStr); if(dp){ plan = dp.blocks; startTime = dp.startTime || '09:00'; } }
+  if(plan){
+    const [h,m] = startTime.split(':').map(Number); let cur = (h||0)*60 + (m||0);
+    plan.forEach((b,i) => {
+      const mins = b.mins || 25;
+      items.push({
+        kind: b.isPause ? 'pause' : 'focus',
+        startMin: cur, endMin: cur+mins,
+        name: b.isPause ? T('dpl_type_pause') : (b.subject || T('phase_focus')),
+        color: b.isPause ? '#818cf8' : colorFor(b.subject || T('phase_focus')),
+        blockIdx: i, isToday: (dateStr === todayStr() && blocks.length > 0)
+      });
+      cur += mins;
+    });
+  }
+  return items;
+}
+
+/* ---- Apply a new duration to a block in today's blocks or a saved dayPlan ---- */
+function _agCommitBlockMins(dateStr, idx, mins){
+  mins = Math.max(5, Math.min(180, mins));
+  if(dateStr === todayStr() && blocks.length){
+    if(blocks[idx]){
+      blocks[idx].mins = mins;
+      if(!running && curBlock === idx && curPhase === 'focus' && !blocks[idx].isPause){ totalTime = mins*60; timeLeft = mins*60; }
+      saveData();
+      // Sync any other currently-visible screen
+      if(!document.getElementById('overview').classList.contains('out')) renderOverview();
+    }
+  } else {
+    const dp = _getDayPlan(dateStr);
+    if(dp && dp.blocks[idx]){
+      dp.blocks[idx].mins = mins;
+      dayPlans[dateStr] = dp;
+      saveData();
+    }
+  }
+}
+
+/* ---- Wire mouse drag handlers on agenda blocks (resize + click-to-edit) ---- */
+function _agWireDrag(){
+  const HOUR_PX = 56, HOURS = 13;
+  const pxPerMin = (HOUR_PX * HOURS) / (HOURS * 60);
+  document.querySelectorAll('.ag-block').forEach(el => {
+    const isExam = el.classList.contains('ag-block-exam');
+    const date = el.dataset.date;
+    const bidx = el.dataset.bidx;
+
+    if(!isExam && bidx != null){
+      // Resize via bottom edge
+      el.addEventListener('mousedown', (e) => {
+        const rect = el.getBoundingClientRect();
+        const isResize = (e.clientY - rect.top) > (rect.height - 10);
+        if(!isResize) return;
+        e.preventDefault(); e.stopPropagation();
+        el.classList.add('ag-block-dragging');
+        const startY = e.clientY;
+        const startHeight = el.clientHeight;
+        const timeEl = el.querySelector('.agb-time');
+        let movedFar = false;
+        const onMove = (ev) => {
+          const dy = ev.clientY - startY;
+          if(Math.abs(dy) > 3) movedFar = true;
+          const newH = Math.max(20, startHeight + dy);
+          el.style.height = newH + 'px';
+          const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+          if(timeEl) timeEl.textContent = mins + ' min';
+        };
+        const onUp = (ev) => {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+          el.classList.remove('ag-block-dragging');
+          if(!movedFar) return;
+          const dy = ev.clientY - startY;
+          const newH = Math.max(20, startHeight + dy);
+          const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+          _agCommitBlockMins(date, +bidx, mins);
+          renderAgenda();
+          if(typeof banner === 'function') banner(mins + ' min ✓');
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
+    }
+
+    // Click → open editor (today → goToday, dayPlan → editDayPlan, exam → open exam modal)
+    el.addEventListener('click', (e) => {
+      // ignore if a drag just happened (height was changed)
+      if(el.classList.contains('ag-block-dragging')) return;
+      e.stopPropagation();
+      if(isExam){
+        const examId = el.dataset.examId;
+        if(examId) openExamModal(examId);
+        return;
+      }
+      if(date === todayStr()){
+        goToday();
+        if(bidx != null) curBlock = +bidx;
+      } else {
+        editDayPlan(date);
+      }
+    });
+  });
+}
+
+function _agWeekSummary(weekStartDate){
+  let plannedMins = 0, focusCount = 0, pauseCount = 0, examCount = 0;
+  for(let i = 0; i < 7; i++){
+    const d = new Date(weekStartDate); d.setDate(d.getDate()+i); const ds = _agIsoDate(d);
+    examCount += examDates.filter(e => e.date === ds).length;
+    let plan = null;
+    if(ds === todayStr() && blocks.length) plan = blocks;
+    else { const dp = _getDayPlan(ds); if(dp) plan = dp.blocks; }
+    if(plan) plan.forEach(b => { if(b.isPause) pauseCount++; else { focusCount++; plannedMins += (b.mins||0); } });
+  }
+  return { plannedMins, focusCount, pauseCount, examCount };
+}
+
+function _agUpcomingExams(){
+  const today = todayStr();
+  return examDates.filter(e => e.date >= today).sort((a,b) => a.date.localeCompare(b.date)).slice(0,5);
+}
 
 function renderAgenda(){
   if(!agendaViewDate) agendaViewDate = new Date();
-  const d = agendaViewDate;
+  const wrap = document.getElementById('agendaWrap');
+  if(!wrap) return;
 
-  // Header labels
-  document.getElementById('agendaBackLbl').textContent = '← ' + T('agenda_back');
-  document.getElementById('agendaTitleEl').textContent = T('agenda_title');
-  document.getElementById('agendaAddBtn').textContent = T('agenda_add_exam');
-
-  // Month label
-  const monthLbl = d.toLocaleDateString(S.lang === 'en' ? 'en-US' : S.lang, {month:'long', year:'numeric'});
-  document.getElementById('agendaMonthLbl').textContent = monthLbl.charAt(0).toUpperCase() + monthLbl.slice(1);
-
-  // Calendar grid
-  const cal = document.getElementById('agendaCal');
-  cal.innerHTML = '';
-
-  const year = d.getFullYear(), month = d.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay  = new Date(year, month + 1, 0);
   const today = todayStr();
+  const view = _agendaView;
+  const focusDate = new Date(agendaViewDate);
+  const weekStart = _agWeekStart(focusDate);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
+  const weekN = _agWeekNumber(focusDate);
+  const lang = S.lang === 'en' ? 'en-US' : S.lang;
 
-  // Day-of-week headers (Mon-Sun)
-  const dayNames = ['Ma','Di','Wo','Do','Vr','Za','Zo'];
-  if(S.lang === 'en') { dayNames.splice(0, 7, 'Mo','Tu','We','Th','Fr','Sa','Su'); }
-  else if(S.lang === 'fr') { dayNames.splice(0, 7, 'Lu','Ma','Me','Je','Ve','Sa','Di'); }
-  else if(S.lang === 'es') { dayNames.splice(0, 7, 'Lu','Ma','Mi','Ju','Vi','Sá','Do'); }
-  else if(S.lang === 'ro') { dayNames.splice(0, 7, 'Lu','Ma','Mi','Jo','Vi','Sâ','Du'); }
-  dayNames.forEach(n => {
-    const h = document.createElement('div');
-    h.className = 'cal-hdr'; h.textContent = n;
-    cal.appendChild(h);
-  });
+  const monthLbl = (() => { const s = focusDate.toLocaleDateString(lang, {month:'long', year:'numeric'}); return s.charAt(0).toUpperCase()+s.slice(1); })();
+  const fmtRange = () => {
+    const a = weekStart.getDate(), b = weekEnd.getDate();
+    const mB = weekEnd.toLocaleDateString(lang, {month:'short'}).replace('.','');
+    const mA = weekStart.toLocaleDateString(lang, {month:'short'}).replace('.','');
+    return (weekStart.getMonth() === weekEnd.getMonth()) ? `${a} – ${b} ${mB}` : `${a} ${mA} – ${b} ${mB}`;
+  };
 
-  // Start offset (Mon=0)
-  let startOffset = (firstDay.getDay() + 6) % 7;
-  for(let i = 0; i < startOffset; i++){
-    const blank = document.createElement('div'); blank.className = 'cal-day cal-blank'; cal.appendChild(blank);
+  const dayNamesByLang = {
+    en:['MO','TU','WE','TH','FR','SA','SU'], nl:['MA','DI','WO','DO','VR','ZA','ZO'],
+    fr:['LU','MA','ME','JE','VE','SA','DI'], es:['LU','MA','MI','JU','VI','SÁ','DO'],
+    ro:['LU','MA','MI','JO','VI','SÂ','DU']
+  };
+  const dn = dayNamesByLang[S.lang] || dayNamesByLang.en;
+
+  // ── Sidebar ──
+  const y = focusDate.getFullYear(), mo = focusDate.getMonth();
+  const first = new Date(y,mo,1), last = new Date(y,mo+1,0);
+  let mini = dn.map(n => `<div class="agm-hdr">${n.slice(0,2)}</div>`).join('');
+  const off = (first.getDay()+6)%7;
+  for(let i=0;i<off;i++) mini += `<div class="agm-day agm-blank"></div>`;
+  for(let d=1; d<=last.getDate(); d++){
+    const ds = y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+    const cellDate = new Date(y,mo,d);
+    const isToday = ds === today;
+    const inWeek = cellDate >= weekStart && cellDate <= weekEnd;
+    const cls = 'agm-day' + (isToday?' is-today':'') + (inWeek?' in-week':'');
+    const hasExam = examDates.some(e => e.date === ds);
+    const hasPlan = !!dayPlans[ds];
+    mini += `<button class="${cls}" onclick="agendaOpenDay('${ds}')">${d}${hasExam||hasPlan?`<span class="agm-dot${hasExam?' exam':''}"></span>`:''}</button>`;
   }
 
-  for(let day = 1; day <= lastDay.getDate(); day++){
-    const dateStr = year + '-' + String(month+1).padStart(2,'0') + '-' + String(day).padStart(2,'0');
-    const cell = document.createElement('div');
-    cell.className = 'cal-day';
-    if(dateStr === today) cell.classList.add('cal-today');
+  const upcoming = _agUpcomingExams();
+  const upcomingHtml = upcoming.length ? upcoming.map(e => {
+    const d = new Date(e.date+'T12:00:00'), tn = new Date(today+'T12:00:00');
+    const diff = Math.round((d - tn)/86400000);
+    const dayLbl = diff === 0 ? T('agenda_today') : diff === 1 ? T('agenda_tomorrow') : Tf('agenda_days_left', {n:diff});
+    const dayNum = d.getDate();
+    const monShort = d.toLocaleDateString(lang,{month:'short'}).replace('.','');
+    return `<button class="ag-up-row" onclick="agendaOpenDay('${e.date}')">
+      <span class="ag-up-date"><span class="ag-up-num">${dayNum}</span><span class="ag-up-mon">${esc(monShort)}</span></span>
+      <span class="ag-up-subj">${esc(e.subject)}</span>
+      <span class="ag-up-rel">${esc(dayLbl)}</span>
+    </button>`;
+  }).join('') : `<div class="ag-up-empty">${esc(T('agenda_no_exams'))}</div>`;
 
-    const exams = examDates.filter(e => e.date === dateStr);
-    const hasPlan = !!dayPlans[dateStr];
-    const histEntry = history.find(h => h.date === dateStr);
+  const sidebarHtml = `
+    <aside class="ag-sidebar">
+      <div class="ag-mini-card">
+        <div class="ag-mini-head">
+          <button class="ag-mini-nav" onclick="agendaNavMonth(-1)" aria-label="prev">‹</button>
+          <div class="ag-mini-lbl">${esc(monthLbl)}</div>
+          <button class="ag-mini-nav" onclick="agendaNavMonth(1)" aria-label="next">›</button>
+        </div>
+        <div class="ag-mini-grid">${mini}</div>
+      </div>
+      <button class="ag-add-exam-btn" onclick="openExamModal()">${esc(T('agenda_add_exam'))}</button>
+      <div class="ag-upcoming">
+        <div class="ag-up-title">${esc(T('agenda_upcoming'))}</div>
+        ${upcomingHtml}
+      </div>
+    </aside>`;
 
-    let dots = '';
-    if(exams.length) dots += '<span class="cal-dot exam"></span>';
-    if(hasPlan || histEntry) dots += '<span class="cal-dot plan"></span>';
+  // ── Main view ──
+  let mainHtml = '';
+  if(view === 'week'){
+    const HOUR_START = 8, HOUR_END = 21;
+    const HOURS = HOUR_END - HOUR_START;
+    const HOUR_PX = 56;
+    const startMinTotal = HOUR_START * 60;
+    const totalMin = HOURS * 60;
 
-    cell.innerHTML = `<span class="cal-day-num">${day}</span>${dots ? '<div class="cal-dots">' + dots + '</div>' : ''}`;
-    cell.onclick = () => showAgendaDay(dateStr);
-    cal.appendChild(cell);
-  }
+    let hoursHtml = '';
+    for(let h = HOUR_START; h <= HOUR_END; h++) hoursHtml += `<div class="ag-hour-lbl">${String(h).padStart(2,'0')}:00</div>`;
 
-  // Show today's detail by default
-  showAgendaDay(today);
-}
+    const days = [];
+    for(let i = 0; i < 7; i++){ const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push({d, ds:_agIsoDate(d), isToday: _agIsoDate(d) === today}); }
 
-let _agendaSelectedDay = null;
-function showAgendaDay(dateStr){
-  _agendaSelectedDay = dateStr;
-  const detail = document.getElementById('agendaDayDetail');
-  const exams = examDates.filter(e => e.date === dateStr);
-  const plan = dayPlans[dateStr];
-  const histEntry = history.find(h => h.date === dateStr);
+    const dayHdrs = days.map((dy,i) => `<div class="ag-day-hdr ${dy.isToday?'is-today':''}"><div class="ag-day-lbl">${dn[i]}</div><div class="ag-day-num">${dy.d.getDate()}</div></div>`).join('');
 
-  const d = new Date(dateStr + 'T12:00:00');
-  const today = todayStr();
-  const diffDays = Math.round((d - new Date(today + 'T12:00:00')) / 86400000);
-  let dayLbl = '';
-  if(diffDays === 0) dayLbl = T('agenda_today');
-  else if(diffDays === 1) dayLbl = T('agenda_tomorrow');
-  else if(diffDays > 1) dayLbl = Tf('agenda_days_left', {n: diffDays});
-  else dayLbl = Math.abs(diffDays) + (S.lang === 'nl' ? ' dagen geleden' : ' days ago');
+    const dayCols = days.map(dy => {
+      const items = _agDayItems(dy.ds);
+      const blocksHtml = items.map(it => {
+        const top = Math.max(0, ((it.startMin - startMinTotal)/totalMin) * (HOURS * HOUR_PX));
+        const heightPx = Math.max(22, ((it.endMin - it.startMin)/totalMin) * (HOURS * HOUR_PX) - 3);
+        const isPause = it.kind === 'pause';
+        const isExam  = it.kind === 'exam';
+        const startStr = `${String(Math.floor(it.startMin/60)%24).padStart(2,'0')}:${String(it.startMin%60).padStart(2,'0')}`;
+        const endStr   = `${String(Math.floor(it.endMin/60)%24).padStart(2,'0')}:${String(it.endMin%60).padStart(2,'0')}`;
+        const bg = isPause ? 'rgba(129,140,248,0.18)' : (isExam ? `color-mix(in srgb, ${it.color} 30%, var(--bg2))` : `color-mix(in srgb, ${it.color} 32%, var(--bg2))`);
+        const bd = isPause ? '#818cf8' : it.color;
+        const idAttr = isExam ? `data-exam-id="${esc(it.id||'')}"` : (it.blockIdx != null ? `data-bidx="${it.blockIdx}"` : '');
+        return `<div class="ag-block ag-block-${it.kind}" data-date="${dy.ds}" ${idAttr} style="top:${top}px;height:${heightPx}px;background:${bg};border-left-color:${bd}">
+          <div class="agb-name">${esc(it.name)}</div>
+          ${isExam ? `<div class="agb-tag">${esc(T('agenda_exam_lbl').toUpperCase())}</div><div class="agb-time">${startStr} – ${endStr}</div>` : `<div class="agb-time">${it.endMin - it.startMin} min</div>`}
+          ${!isExam ? `<div class="ag-block-resize" title="${esc(T('agenda_resize_hint'))}"></div>` : ''}
+        </div>`;
+      }).join('');
+      let lines = '';
+      for(let h = 1; h < HOURS; h++) lines += `<div class="ag-hr-line" style="top:${h*HOUR_PX}px"></div>`;
+      return `<div class="ag-day-col ${dy.isToday?'is-today':''}" data-date="${dy.ds}" style="height:${HOURS*HOUR_PX}px" onclick="agendaOpenDay('${dy.ds}')">${lines}${blocksHtml}</div>`;
+    }).join('');
 
-  const dayName = d.toLocaleDateString(S.lang === 'en' ? 'en-US' : S.lang, {weekday:'long', day:'numeric', month:'long'});
-
-  let html = `<div class="agenda-day-title">
-    <span class="agenda-day-name">${dayName}</span>
-    <span class="agenda-day-rel">${dayLbl}</span>
-  </div>`;
-
-  // Exams
-  if(exams.length){
-    html += `<div class="agenda-section-lbl">${T('agenda_exam_lbl')}</div>`;
-    exams.forEach(ex => {
-      const col = ex.color || '#f87171';
-      html += `<div class="agenda-exam-card" style="border-left-color:${col}">
-        <div class="agenda-exam-name">${esc(ex.subject)}</div>
-        ${ex.time ? `<div class="agenda-exam-time">🕐 ${esc(ex.time)}</div>` : ''}
-        ${ex.note ? `<div class="agenda-exam-note">${esc(ex.note)}</div>` : ''}
-        <button class="agenda-exam-del" onclick="deleteExam('${ex.id}')">✕</button>
+    mainHtml = `
+      <div class="ag-week">
+        <div class="ag-week-head">
+          <div class="ag-hgut"></div>
+          ${dayHdrs}
+        </div>
+        <div class="ag-week-body" style="height:${HOURS*HOUR_PX}px">
+          <div class="ag-time-gutter" style="height:${HOURS*HOUR_PX}px">${hoursHtml}</div>
+          ${dayCols}
+        </div>
       </div>`;
-    });
-  }
-
-  // History / plan
-  if(histEntry){
-    html += `<div class="agenda-section-lbl">${T('agenda_plan_lbl')}</div>
-      <div class="agenda-hist-card">✓ ${fmtDur(histEntry.mins)} ${S.lang === 'nl' ? 'gestudeerd' : 'studied'}</div>`;
-  } else if(plan){
-    html += `<div class="agenda-section-lbl">${T('agenda_plan_lbl')}</div>`;
-    plan.forEach(b => {
-      html += `<div class="agenda-plan-row"><span class="agenda-plan-dot" style="background:${b.isPause ? 'var(--muted)' : colorFor(b.subject || '')}"></span>${esc(b.isPause ? T('dpl_type_pause') : (b.subject || T('dpl_type_focus')))} · ${fmtDur(b.mins)}</div>`;
-    });
-    html += `<button class="agenda-plan-btn" onclick="editDayPlan('${dateStr}')">${T('agenda_edit_day')}</button>`;
-    html += `<button class="agenda-del-plan-btn" onclick="deleteDayPlan('${dateStr}')">✕ ${S.lang === 'nl' ? 'Plan verwijderen' : 'Remove plan'}</button>`;
-  } else if(diffDays >= 0) {
-    if(!exams.length) html += `<div class="agenda-no-events">${T('agenda_no_events')}</div>`;
-    html += `<button class="agenda-plan-btn" onclick="planFromAgenda('${dateStr}')">${T('agenda_plan_day')}</button>`;
   } else {
-    if(!exams.length) html += `<div class="agenda-no-events">${T('agenda_no_events')}</div>`;
+    let cells = dn.map(n => `<div class="agmo-hdr">${n.slice(0,2)}</div>`).join('');
+    const offset = (first.getDay()+6)%7;
+    for(let i = 0; i < offset; i++) cells += `<div class="agmo-day agmo-blank"></div>`;
+    for(let d = 1; d <= last.getDate(); d++){
+      const ds = y+'-'+String(mo+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+      const isToday = ds === today;
+      const items = _agDayItems(ds);
+      const dots = items.slice(0,5).map(it => `<span class="agmo-dot" style="background:${it.color}"></span>`).join('');
+      cells += `<button class="agmo-day${isToday?' is-today':''}" onclick="agendaOpenDay('${ds}')"><span class="agmo-num">${d}</span>${dots?`<div class="agmo-dots">${dots}</div>`:''}</button>`;
+    }
+    mainHtml = `<div class="ag-month">${cells}</div>`;
   }
 
-  detail.innerHTML = html;
+  // Summary
+  const summary = _agWeekSummary(weekStart);
+  const summaryHtml = `
+    <div class="ag-summary">
+      <div class="ag-sum-title">${esc(T('prog_week'))}</div>
+      <div class="ag-sum-grid">
+        <div class="ag-sum-cell"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><div class="ag-sum-lbl">${esc(T('agenda_sum_planned'))}</div><div class="ag-sum-val">${fmtDur(summary.plannedMins)}</div></div>
+        <div class="ag-sum-cell"><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg><div class="ag-sum-lbl">${esc(T('agenda_sum_focus'))}</div><div class="ag-sum-val">${summary.focusCount}</div></div>
+        <div class="ag-sum-cell"><svg viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="2"><path d="M4 7h12v4a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4V7zM16 9h2a2 2 0 1 1 0 4h-2"/><path d="M4 19h14"/></svg><div class="ag-sum-lbl">${esc(T('agenda_sum_pause'))}</div><div class="ag-sum-val">${summary.pauseCount}</div></div>
+        <div class="ag-sum-cell"><svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><path d="M3 8l9-5 9 5-9 5-9-5z"/><path d="M5 11v5l7 4 7-4v-5"/></svg><div class="ag-sum-lbl">${esc(T('agenda_sum_exams'))}</div><div class="ag-sum-val">${summary.examCount}</div></div>
+      </div>
+    </div>`;
 
-  // Highlight selected day
-  document.querySelectorAll('.cal-day').forEach(el => el.classList.remove('cal-selected'));
+  wrap.innerHTML = `
+    <div class="ag-head">
+      <div class="ag-head-left">
+        <h1 class="ag-title">${esc(T('agenda_title'))}</h1>
+        <div class="ag-sub">${esc(T('agenda_subtitle'))}</div>
+      </div>
+      <div class="ag-head-right">
+        <div class="ag-view-toggle">
+          <button class="${view==='month'?'on':''}" onclick="agendaSetView('month')">${esc(T('agenda_month'))}</button>
+          <button class="${view==='week'?'on':''}" onclick="agendaSetView('week')">${esc(T('agenda_week'))}</button>
+        </div>
+        <div class="ag-nav">
+          <span class="ag-nav-lbl">${view==='week' ? `${esc(T('agenda_week_n'))} ${weekN} · ${esc(fmtRange())}` : esc(monthLbl)}</span>
+          <button class="ag-nav-btn" onclick="agendaNav(-1)" aria-label="prev">‹</button>
+          <button class="ag-nav-btn" onclick="agendaNav(1)" aria-label="next">›</button>
+        </div>
+        <button class="ag-today-btn" onclick="agendaGoToday()">${esc(T('agenda_today_btn'))}</button>
+      </div>
+    </div>
+    <div class="ag-main">
+      ${sidebarHtml}
+      <div class="ag-right">
+        ${mainHtml}
+        ${summaryHtml}
+      </div>
+    </div>`;
+
+  _agWireDrag();
 }
 
 function planFromAgenda(dateStr){
-  // Open planner pre-set for that date; save plan back to dayPlans[dateStr]
-  D.bb = [];
-  plannerStartTime = '09:00';
-  plannerEndTime = '';
-  plannerMode = 'full';
-  // After startFromPlanner, we'll save to dayPlans instead of starting immediately
+  D.bb = []; plannerStartTime = '09:00'; plannerEndTime = ''; plannerMode = 'full';
   _planningForDate = dateStr;
-  renderPlanner();
-  showScreen('planner');
+  renderPlanner(); showScreen('planner');
 }
-
 function editDayPlan(dateStr){
-  D.bb = (dayPlans[dateStr] || []).map(b => ({...b, done:false, tasks:b.tasks||[]}));
-  plannerStartTime = '09:00';
+  const dp = _getDayPlan(dateStr);
+  D.bb = (dp?.blocks || []).map(b => ({...b, done:false, tasks:b.tasks||[]}));
+  plannerStartTime = dp?.startTime || '09:00';
   plannerMode = 'full';
   _planningForDate = dateStr;
-  renderPlanner();
-  showScreen('planner');
+  renderPlanner(); showScreen('planner');
 }
-
-function deleteDayPlan(dateStr){
-  delete dayPlans[dateStr];
-  saveData();
-  showAgendaDay(dateStr);
-}
+function deleteDayPlan(dateStr){ delete dayPlans[dateStr]; saveData(); renderAgenda(); }
 
 /* ---- Exam modal ---- */
 let _editingExamId = null;

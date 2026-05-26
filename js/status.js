@@ -52,12 +52,12 @@ async function loadFriendsAndSubscribe() {
 
   // 2) Profielen + statussen parallel ophalen
   const [profRes, statRes] = await Promise.all([
-    supabase.from('profiles').select('id, username').in('id', _friendIds),
+    supabase.from('profiles').select('id, username, avatar_url').in('id', _friendIds),
     supabase.from('user_status').select('user_id, status').in('user_id', _friendIds)
   ]);
 
   _profiles = {};
-  (profRes.data || []).forEach(p => { _profiles[p.id] = p.username; });
+  (profRes.data || []).forEach(p => { _profiles[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
 
   _statusMap = {};
   (statRes.data || []).forEach(r => { _statusMap[r.user_id] = r.status; });
@@ -90,10 +90,12 @@ async function loadFriendsAndSubscribe() {
 function _buildFriendList() {
   return _friendIds.map(id => ({
     id,
-    username: _profiles[id] || '?',
-    status:   _statusMap[id] || 'offline'
+    username:   _profiles[id]?.username || '?',
+    avatar_url: _profiles[id]?.avatar_url || '',
+    status:     _statusMap[id] || 'offline'
   }));
 }
+function _av(f, size){ return (typeof window.fbAvatarHTML === 'function') ? window.fbAvatarHTML(f.username, f.avatar_url, size||28) : `<div class="afw-avatar">${(f.username||'?')[0].toUpperCase()}</div>`; }
 
 // ── Actieve-vrienden widget — homepage + app ───────────
 function renderWidget(friends) {
@@ -115,9 +117,7 @@ function renderWidget(friends) {
           <span class="afw-dot"></span>
           <div class="afw-text">${label}</div>
           <div class="afw-avatars">
-            ${active.slice(0, 5).map(f => `
-              <div class="afw-avatar" title="${_esc(f.username)}">${f.username[0].toUpperCase()}</div>
-            `).join('')}
+            ${active.slice(0, 5).map(f => `<span title="${_esc(f.username)}">${_av(f, 30)}</span>`).join('')}
             ${active.length > 5 ? `<div class="afw-avatar afw-more">+${active.length - 5}</div>` : ''}
           </div>
         </div>`;
@@ -138,14 +138,15 @@ function renderWidget(friends) {
           <span class="afw-dot"></span>
           <span class="afw-app-label">${label}</span>
           <div class="afw-avatars">
-            ${active.slice(0, 4).map(f => `
-              <div class="afw-avatar" title="${_esc(f.username)}">${f.username[0].toUpperCase()}</div>
-            `).join('')}
+            ${active.slice(0, 4).map(f => `<span title="${_esc(f.username)}">${_av(f, 28)}</span>`).join('')}
             ${active.length > 4 ? `<div class="afw-avatar afw-more">+${active.length - 4}</div>` : ''}
           </div>
         </div>`;
     }
   }
+
+  // Homepage + dashboard live social views
+  refreshSocialViews();
 }
 
 function _esc(s) {
@@ -154,6 +155,21 @@ function _esc(s) {
 
 // ── Expose status cache voor friends.js ───────────────
 function getStatusCache() { return _statusMap; }
+
+// ── Vriendenlijsten voor homepage / dashboard ─────────
+function getActiveFriends() { return _buildFriendList().filter(f => f.status === 'studying'); }
+function getFriendList()    { return _buildFriendList(); }
+function fbUserId()         { return _myId; }
+function refreshSocialViews() {
+  if (typeof window.renderOverviewSocial === 'function' &&
+      document.getElementById('overview')?.style.display !== 'none') {
+    window.renderOverviewSocial();
+  }
+  if (typeof window.renderHomeSocial === 'function' &&
+      document.getElementById('home')?.style.display !== 'none') {
+    window.renderHomeSocial();
+  }
+}
 
 // ── Offline bij pagina sluiten / verbergen ────────────
 async function _goOffline() {
@@ -217,4 +233,7 @@ function _updateLbAreas(userId) {
 // ── Expose aan window ──────────────────────────────────
 window.updateMyStatus         = updateMyStatus;
 window.getStatusCache         = getStatusCache;
+window.getActiveFriends       = getActiveFriends;
+window.getFriendList          = getFriendList;
+window.fbUserId               = fbUserId;
 window.reloadFriendStatuses   = loadFriendsAndSubscribe;

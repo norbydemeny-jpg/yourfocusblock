@@ -10,99 +10,147 @@ function backFromProgress(){
   else goHome();
 }
 
-const PROG_INTRO_KEY = 'fb_prog_intro_shown';
+/* ══════════════════════════════════════════════════════
+   STATISTIEKEN & VRIENDEN
+   ══════════════════════════════════════════════════════ */
+let _statsRange = 'week'; // 'today' | 'week'
+function statsSetRange(r){ _statsRange = r; renderProgress(); }
+
+function _stWeekStart(){
+  const d = new Date(); const ws = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  ws.setDate(ws.getDate() - ((ws.getDay() + 6) % 7));
+  return ws.getFullYear() + '-' + String(ws.getMonth()+1).padStart(2,'0') + '-' + String(ws.getDate()).padStart(2,'0');
+}
+function _stFmtH(mins){ mins = Math.round(mins || 0); if(!mins) return '0m'; const h = Math.floor(mins/60), m = mins%60, hu = T('hours_short'); return h ? (m ? `${h}${hu} ${m}m` : `${h}${hu}`) : `${m}m`; }
+function _stTodayMins(){ const t = todayStr(); const h = history.find(x => x.date === t); const live = blocks.length ? (completedMins + currentSessionMins) : 0; return Math.max(h ? h.mins : 0, live); }
+function _stWeekMins(){ const ws = _stWeekStart(), t = todayStr(); let m = 0; history.forEach(h => { if(h.date >= ws && h.date !== t) m += h.mins || 0; }); return m + _stTodayMins(); }
+
+function _stSubjects(range){
+  const ws = _stWeekStart(), t = todayStr();
+  const mins = {}, sess = {};
+  const add = (n, m, c) => { if(!n || n === '__pause__') return; mins[n] = (mins[n]||0) + m; sess[n] = (sess[n]||0) + (c||0); };
+  const estCount = (n, m, cnt) => (cnt && cnt[n] != null) ? cnt[n] : Math.max(1, Math.round(m / (S.focus || 50)));
+  history.forEach(h => {
+    if(h.date === t) return;
+    if(range === 'today') return;
+    if(h.date < ws) return;
+    const subs = h.subjects || {}, cnt = h.subjectsCount || {};
+    for(const n in subs) add(n, subs[n], estCount(n, subs[n], cnt));
+  });
+  // today (live blocks if active, else finalized history)
+  if(blocks.length){
+    blocks.filter(b => b.done && !b.isPause).forEach(b => add(b.subject || T('phase_focus'), b.mins, 1));
+  } else {
+    const h = history.find(x => x.date === t);
+    if(h){ const subs = h.subjects || {}, cnt = h.subjectsCount || {}; for(const n in subs) add(n, subs[n], estCount(n, subs[n], cnt)); }
+  }
+  return Object.keys(mins).map(n => ({ name:n, mins:mins[n], sessions:sess[n] })).sort((a,b) => b.mins - a.mins);
+}
+
+function _stStatusMeta(s){
+  if(s === 'studying') return { cls:'st-studying', label:T('status_studying') };
+  if(s === 'break')    return { cls:'st-break',    label:T('status_break') };
+  if(s === 'online')   return { cls:'st-online',   label:T('status_online') };
+  return { cls:'st-offline', label:T('status_offline') };
+}
 
 function renderProgress(){
-  document.getElementById('progBackBtn').innerHTML = '← ' + esc(T('prog_back'));
+  const bb = document.getElementById('progBackBtn'); if(bb) bb.innerHTML = '← ' + esc(T('prog_back'));
   const host = document.getElementById('progBody');
 
-  // First-time intro card
-  let introHtml = '';
-  if(!localStorage.getItem(PROG_INTRO_KEY)){
-    introHtml = `<div class="prog-intro-card" id="progIntroCard">
-      <div class="prog-intro-icon">📊</div>
-      <div class="prog-intro-text">
-        <div class="prog-intro-title">${esc(T('prog_open'))}</div>
-        <div class="prog-intro-sub">${esc(T('prog_intro'))}</div>
+  const today = _stTodayMins(), week = _stWeekMins();
+  const goalH = S.weeklyGoal || 15;
+  const weekPct = Math.min(100, Math.round(week / (goalH * 60) * 100));
+  const rangeLbl = (_statsRange === 'today' ? T('nav_today') : T('prog_week')).toLowerCase();
+
+  const subs = _stSubjects(_statsRange);
+  const maxS = Math.max(...subs.map(s => s.mins), 1);
+
+  host.innerHTML = `
+    <div class="stats-head">
+      <h1 class="stats-title">${esc(T('nav_stats'))}</h1>
+      <div class="stats-toggle">
+        <button class="${_statsRange === 'today' ? 'on' : ''}" onclick="statsSetRange('today')">${esc(T('nav_today'))}</button>
+        <button class="${_statsRange === 'week' ? 'on' : ''}" onclick="statsSetRange('week')">${esc(T('prog_week'))}</button>
       </div>
-      <button class="prog-intro-close" onclick="dismissProgIntro()" title="${T('done')}">✕</button>
-    </div>`;
-  }
-
-  // Lifetime stats with info tooltips
-  const mkInfo = (tipKey) => `<span class="stat-info" tabindex="0" aria-label="${T(tipKey)}">ℹ<span class="stat-info-tip">${esc(T(tipKey))}</span></span>`;
-
-  let html = introHtml + `<div class="prog-section">
-    <div class="prog-sec-t">${esc(T('prog_lifetime'))}</div>
-    <div class="prog-intro-line">${esc(T('prog_intro'))}</div>
-    <div class="lifetime-row">
-      <div class="lt-stat"><div class="lt-v">${lifetimeBlocks}</div><div class="lt-l">${esc(T('lt_blocks'))}${mkInfo('prog_tip_blocks')}</div></div>
-      <div class="lt-stat"><div class="lt-v">${fmtDur(lifetimeMins)}</div><div class="lt-l">${esc(T('lt_focus'))}${mkInfo('prog_tip_focus')}</div></div>
-      <div class="lt-stat"><div class="lt-v">🔥${streak}</div><div class="lt-l">${esc(T('lt_streak'))}${mkInfo('prog_tip_streak')}</div></div>
     </div>
-  </div>`;
-  html += renderWeekChart();
-  html += renderSubjStats();
-  html += renderVillage();
-  html += renderCompanionProg();
-  host.innerHTML = html;
-  // animate bars
-  setTimeout(() => { document.querySelectorAll('.wc-bar').forEach(b => { b.style.height = b.dataset.h + '%'; }); }, 100);
-  setTimeout(() => { document.querySelectorAll('.ss-fill').forEach(b => { b.style.width = b.dataset.w + '%'; }); }, 120);
-}
 
-function dismissProgIntro(){
-  localStorage.setItem(PROG_INTRO_KEY, '1');
-  const card = document.getElementById('progIntroCard');
-  if(card) card.remove();
-}
+    <div class="stats-cards">
+      <div class="stats-card"><div class="sc-top"><span class="sc-lbl">${esc(T('nav_today'))}</span><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="sc-big">${_stFmtH(today)}</div><div class="sc-sub">${esc(T('stats_total_focus'))}</div></div>
+      <div class="stats-card"><div class="sc-top"><span class="sc-lbl">${esc(T('prog_week'))}</span><svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg></div><div class="sc-big">${_stFmtH(week)}</div><div class="sc-sub">${esc(T('stats_total_focus'))}</div></div>
+      <div class="stats-card"><div class="sc-top"><span class="sc-lbl">${esc(T('stats_weekgoal'))}</span><svg viewBox="0 0 36 36" class="sc-ring"><circle cx="18" cy="18" r="15" fill="none" stroke="var(--bg4)" stroke-width="4"/><circle cx="18" cy="18" r="15" fill="none" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-dasharray="${2*Math.PI*15}" stroke-dashoffset="${2*Math.PI*15*(1-weekPct/100)}" transform="rotate(-90 18 18)"/></svg></div><div class="sc-big">${weekPct}%</div><div class="sc-sub">${esc(Tf('stats_goal_of',{h:goalH}))}</div></div>
+      <div class="stats-card"><div class="sc-top"><span class="sc-lbl">${esc(T('stats_together_week'))}</span><span class="sc-emoji">👥</span></div><div class="sc-big" id="statsTogether">—</div><div class="sc-sub">${esc(T('stats_total_focus'))}</div></div>
+    </div>
 
-function renderWeekChart(){
-  const days = []; const today = new Date();
-  const todayMins = completedMins;
-  for(let i = 6; i >= 0; i--){
-    const d = new Date(today); d.setDate(today.getDate() - i);
-    const ds = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-    let mins = 0;
-    const h = history.find(x => x.date === ds); if(h) mins = h.mins;
-    if(ds === todayStr()) mins = Math.max(mins, todayMins);
-    days.push({d, mins, lbl:d.toLocaleDateString(S.lang === 'en' ? undefined : S.lang, {weekday:'short'}).slice(0,2)});
-  }
-  const max = Math.max(60, ...days.map(d => d.mins));
-  const bars = days.map(d => {
-    const h = Math.round((d.mins / max) * 100);
-    return `<div class="wc-day"><div class="wc-val">${d.mins ? fmtDur(d.mins) : ''}</div><div class="wc-bar-wrap"><div class="wc-bar" data-h="${h}" style="height:0%"></div></div><div class="wc-lbl">${esc(d.lbl)}</div></div>`;
-  }).join('');
-  return `<div class="prog-section"><div class="prog-sec-t">${esc(T('prog_week'))}</div><div class="week-chart">${bars}</div></div>`;
-}
-
-function renderSubjStats(){
-  // merge: all known subjects + any in subjectTotals not in subjects list
-  const allNames = new Set([
-    ...subjects.map(s => s.name),
-    ...Object.keys(subjectTotals).filter(k => k !== '__pause__' && k !== T('phase_focus'))
-  ]);
-  const entries = [...allNames].map(name => ([name, subjectTotals[name] || 0])).sort((a,b) => b[1] - a[1]);
-  const totalMins = entries.reduce((s, [,m]) => s + m, 0);
-  const max = Math.max(...entries.map(e => e[1]), 1);
-  const inner = entries.map(([name, mins]) => {
-    const w = Math.round((mins / max) * 100);
-    const col = colorFor(name);
-    const pct = totalMins > 0 ? Math.round((mins / totalMins) * 100) : 0;
-    const isEmpty = mins === 0;
-    return `<div class="ss-row">
-      <div class="ss-top">
-        <div class="ss-name"><span class="ss-dot" style="background:${col}"></span>${esc(name)}</div>
-        <div class="ss-right">
-          ${!isEmpty ? `<span class="ss-pct">${pct}%</span>` : ''}
-          <div class="ss-val${isEmpty ? ' ss-val-empty' : ''}">${isEmpty ? '—' : fmtDur(mins)}</div>
-        </div>
+    <div class="stats-two">
+      <div class="stats-panel">
+        <div class="sp-head"><span>${esc(T('stats_top_friends'))} ${esc(rangeLbl)}</span><button class="sp-link" onclick="openLeaderboard()">${esc(T('stats_view_all'))}</button></div>
+        <div id="statsLbList" class="stats-lb"><div class="stats-loading">…</div></div>
       </div>
-      <div class="ss-track"><div class="ss-fill" data-w="${w}" style="width:0%;background:${col};${isEmpty ? 'opacity:.25' : ''}"></div></div>
-    </div>`;
-  }).join('');
-  const summary = totalMins > 0 ? `<div class="ss-total">Totaal: <strong>${fmtDur(totalMins)}</strong> focus</div>` : '';
-  return `<div class="prog-section"><div class="prog-sec-t">${esc(T('prog_subjects'))}</div><div class="subj-stats">${inner}${summary}</div></div>`;
+      <div class="stats-panel">
+        <div class="sp-head"><span>${esc(T('stats_friends_active'))}</span><button class="sp-link" onclick="openFriendsModal()">${esc(T('stats_view_friends'))}</button></div>
+        <div id="statsActiveList" class="stats-active"><div class="stats-loading">…</div></div>
+      </div>
+    </div>
+
+    <div class="stats-panel">
+      <div class="sp-head"><span>${esc(T('stats_per_subject'))} ${esc(rangeLbl)}</span></div>
+      <div class="ssub-headrow"><span>${esc(T('stats_subject'))}</span><span></span><span class="ssub-c">${esc(T('stats_sessions'))}</span><span class="ssub-t">${esc(T('stats_total_time'))}</span></div>
+      ${subs.length ? subs.map(s => { const w = Math.round(s.mins/maxS*100); const col = colorFor(s.name); return `<div class="ssub-row"><span class="ssub-name"><span class="ssub-dot" style="background:${col}"></span>${esc(s.name)}</span><span class="ssub-bar"><span class="ssub-fill" data-w="${w}" style="width:0%;background:${col}"></span></span><span class="ssub-c">${s.sessions}</span><span class="ssub-t">${_stFmtH(s.mins)}</span></div>`; }).join('') : `<div class="stats-empty">${esc(T('no_subj_data'))}</div>`}
+      <div class="ssub-foot">${esc(T('stats_rounded'))}</div>
+    </div>
+
+    ${renderVillage()}
+    ${renderCompanionProg()}`;
+
+  setTimeout(() => { document.querySelectorAll('.ssub-fill').forEach(b => { b.style.width = b.dataset.w + '%'; }); }, 80);
+  _fillStatsFriends();
+}
+
+async function _fillStatsFriends(){
+  const lbHost = document.getElementById('statsLbList');
+  const activeHost = document.getElementById('statsActiveList');
+  const togetherEl = document.getElementById('statsTogether');
+  const av = (n,u,s) => (typeof window.fbAvatarHTML === 'function') ? window.fbAvatarHTML(n,u,s) : `<span class="fb-av fb-av-init" style="width:${s}px;height:${s}px">${esc((n||'?')[0].toUpperCase())}</span>`;
+  const loggedIn = (typeof window.fbUserId === 'function') && window.fbUserId();
+
+  if(!loggedIn){
+    const cta = `<div class="stats-empty"><button class="sp-login" onclick="openAuthModal()">${esc(T('stats_login'))}</button></div>`;
+    if(lbHost) lbHost.innerHTML = cta;
+    if(activeHost) activeHost.innerHTML = `<div class="stats-empty">${esc(T('home_social_login_d'))}</div>`;
+    if(togetherEl) togetherEl.textContent = _stFmtH(_statsRange === 'today' ? _stTodayMins() : _stWeekMins());
+    return;
+  }
+
+  // Leaderboard (top friends)
+  try {
+    const data = (typeof window.fbLoadLeaderboard === 'function') ? await window.fbLoadLeaderboard() : null;
+    if(data && lbHost){
+      const field = _statsRange === 'today' ? data.todayMins : data.weekMins;
+      const entries = data.allIds.map(id => ({
+        id, username: id === data.userId ? T('stats_you') : (data.pm[id]?.username || '?'),
+        avatar: data.pm[id]?.avatar_url || '', mins: field[id] || 0, isMe: id === data.userId
+      })).sort((a,b) => b.mins - a.mins || a.username.localeCompare(b.username));
+      const together = Object.values(data.weekMins).reduce((s,m) => s + m, 0);
+      if(togetherEl) togetherEl.textContent = _stFmtH(together);
+      const medals = ['🥇','🥈','🥉'];
+      lbHost.innerHTML = entries.slice(0,6).map((e,i) =>
+        `<div class="stats-lb-row ${e.isMe ? 'me' : ''}"><span class="slb-rank">${medals[i] ?? (i+1)}</span>${av(e.username, e.avatar, 32)}<span class="slb-name">${esc(e.username)}</span><span class="slb-time">${e.mins ? _stFmtH(e.mins) : '—'}</span></div>`
+      ).join('');
+    }
+  } catch(e){ if(lbHost) lbHost.innerHTML = `<div class="stats-empty">—</div>`; }
+
+  // Active friends
+  if(activeHost){
+    const friends = (typeof window.getFriendList === 'function') ? (window.getFriendList() || []) : [];
+    if(!friends.length){
+      activeHost.innerHTML = `<div class="stats-empty">${esc(T('home_social_add_d'))}</div>`;
+    } else {
+      const order = { studying:0, break:1, online:2, offline:3 };
+      const sorted = [...friends].sort((a,b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+      activeHost.innerHTML = sorted.map(f => { const m = _stStatusMeta(f.status); return `<div class="stats-active-row">${av(f.username, f.avatar_url, 34)}<span class="sar-name">${esc(f.username)}</span><span class="sar-status ${m.cls}"><span class="sar-dot"></span>${esc(m.label)}</span></div>`; }).join('');
+    }
+  }
 }
 
 function renderVillage(){

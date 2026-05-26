@@ -26,7 +26,7 @@ async function searchUsers(query) {
   if (!userId || query.trim().length < 2) return [];
   const { data } = await supabase
     .from('profiles')
-    .select('id, username')
+    .select('id, username, avatar_url')
     .ilike('username', `%${query.trim()}%`)
     .neq('id', userId)
     .limit(8);
@@ -72,7 +72,7 @@ async function getIncomingRequests() {
   const senderIds = reqs.map(r => r.requester_id);
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username')
+    .select('id, username, avatar_url')
     .in('id', senderIds);
   const pm = {};
   (profiles || []).forEach(p => { pm[p.id] = p; });
@@ -80,6 +80,7 @@ async function getIncomingRequests() {
     id:         r.id,
     sender_id:  r.requester_id,
     username:   pm[r.requester_id]?.username || '?',
+    avatar_url: pm[r.requester_id]?.avatar_url || '',
     created_at: r.created_at
   }));
 }
@@ -114,13 +115,13 @@ async function getFriends() {
   );
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username')
+    .select('id, username, avatar_url')
     .in('id', otherIds);
   const pm = {};
   (profiles || []).forEach(p => { pm[p.id] = p; });
   return fships.map(f => {
     const otherId = f.requester_id === userId ? f.receiver_id : f.requester_id;
-    return { id: f.id, friend_id: otherId, username: pm[otherId]?.username || '?' };
+    return { id: f.id, friend_id: otherId, username: pm[otherId]?.username || '?', avatar_url: pm[otherId]?.avatar_url || '' };
   });
 }
 
@@ -169,43 +170,62 @@ function switchFriendsTab(tab) {
 async function renderFriendsModal() {
   const body = document.getElementById('friendsModalBody');
   if (!body) return;
-  const userId = await getCurrentUserId();
-  if (!userId) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om vrienden te gebruiken.</p>`;
-    return;
+
+  // Toon laadstatus direct zodat modal nooit leeg is
+  body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">Laden…</div>`;
+
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om vrienden te gebruiken.</p>`;
+      return;
+    }
+
+    const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
+    const reqCount = requests.length;
+
+    // Statussen ophalen — fouten worden genegeerd, offline als fallback
+    const friendIds = friends.map(f => f.friend_id);
+    let statusMap = {};
+    try { statusMap = await _getStatuses(friendIds); } catch {}
+
+    const statusOrder = { studying: 0, break: 1, offline: 2 };
+    const friendsWithStatus = friends
+      .map(f => ({ ...f, status: statusMap[f.friend_id] || 'offline' }))
+      .sort((a, b) => (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2));
+
+    body.innerHTML = `
+      <div class="fr-tabs">
+        <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">
+          Vrienden${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}
+        </button>
+        <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">
+          Verzoeken${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}
+        </button>
+        <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">Zoeken</button>
+      </div>
+      <div id="frContent"></div>
+      <div class="fr-lb-link">
+        <button class="fr-lb-link-btn" onclick="closeFriendsModal();openLeaderboard()">🏆 Ranglijst bekijken</button>
+      </div>`;
+
+    const content = document.getElementById('frContent');
+    if (_friendsTab === 'list')          renderFriendsList(content, friendsWithStatus);
+    else if (_friendsTab === 'requests') renderRequests(content, requests);
+    else                                 renderSearch(content);
+
+  } catch (e) {
+    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Kon vrienden niet laden. Probeer opnieuw.</p>
+      <div style="text-align:center"><button class="btn-ghost" onclick="renderFriendsModal()">↺ Opnieuw</button></div>`;
+    console.error('[Friends] renderFriendsModal error:', e);
   }
+}
 
-  const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
-  const reqCount = requests.length;
-
-  // Statussen ophalen + toevoegen aan vriendenlijst
-  const friendIds   = friends.map(f => f.friend_id);
-  const statusMap   = await _getStatuses(friendIds);
-  const statusOrder = { studying: 0, break: 1, offline: 2 };
-
-  const friendsWithStatus = friends
-    .map(f => ({ ...f, status: statusMap[f.friend_id] || 'offline' }))
-    .sort((a, b) => (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2));
-
-  body.innerHTML = `
-    <div class="fr-tabs">
-      <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">
-        Vrienden${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}
-      </button>
-      <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">
-        Verzoeken${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}
-      </button>
-      <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">Zoeken</button>
-    </div>
-    <div id="frContent"></div>
-    <div class="fr-lb-link">
-      <button class="fr-lb-link-btn" onclick="closeFriendsModal();openLeaderboard()">🏆 Ranglijst bekijken</button>
-    </div>`;
-
-  const content = document.getElementById('frContent');
-  if (_friendsTab === 'list')          renderFriendsList(content, friendsWithStatus);
-  else if (_friendsTab === 'requests') renderRequests(content, requests);
-  else                                 renderSearch(content);
+// ── Avatar helper ──────────────────────────────────────
+function _frAv(o, size){
+  return (typeof window.fbAvatarHTML === 'function')
+    ? window.fbAvatarHTML(o.username, o.avatar_url, size || 44)
+    : `<div class="fr-card-avatar">${(o.username||'?')[0].toUpperCase()}</div>`;
 }
 
 // ── Status helpers ─────────────────────────────────────
@@ -234,7 +254,7 @@ function renderFriendsList(container, friends) {
     ${friends.map(f => `
       <div class="fr-card">
         <div class="fr-avatar-wrap">
-          <div class="fr-card-avatar">${f.username[0].toUpperCase()}</div>
+          ${_frAv(f, 46)}
           ${_statusDot(f.status)}
         </div>
         <div class="fr-card-info">
@@ -259,9 +279,7 @@ function renderRequests(container, requests) {
   container.innerHTML = `<div class="fr-list">
     ${requests.map(r => `
       <div class="fr-card">
-        <div class="fr-avatar-wrap">
-          <div class="fr-card-avatar">${r.username[0].toUpperCase()}</div>
-        </div>
+        <div class="fr-avatar-wrap">${_frAv(r, 46)}</div>
         <div class="fr-card-info">
           <div class="fr-card-name">${escHtml(r.username)}</div>
           <div class="fr-card-status-row"><span class="fr-status-txt offline">Wil bevriend zijn</span></div>
@@ -296,9 +314,7 @@ function renderSearchResults(container, results) {
   container.innerHTML = `<div class="fr-list" style="margin-top:1rem">
     ${results.map(u => `
       <div class="fr-card">
-        <div class="fr-avatar-wrap">
-          <div class="fr-card-avatar">${u.username[0].toUpperCase()}</div>
-        </div>
+        <div class="fr-avatar-wrap">${_frAv(u, 46)}</div>
         <div class="fr-card-info">
           <div class="fr-card-name">${escHtml(u.username)}</div>
         </div>

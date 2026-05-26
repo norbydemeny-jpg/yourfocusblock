@@ -7,12 +7,13 @@ let setTab = 'timer';
 let _orig = null;    // committed snapshot to revert to on cancel
 let _dirty = false;  // any change made since open
 
-function openSettings(){
+function openSettings(tab){
   _orig = JSON.parse(JSON.stringify(S));   // committed state
   _t = JSON.parse(JSON.stringify(S));      // editable draft (previews live)
   _dirty = false;
   document.getElementById('setTitle').textContent = T('set_title');
   if(!onboarded) setTab = 'timer';
+  if(tab) setTab = tab;
   renderSettings();
   document.getElementById('settingsOv').classList.add('open');
 }
@@ -53,18 +54,42 @@ function closeSettings(){ document.getElementById('settingsOv').classList.remove
 function renderSettings(){
   document.getElementById('setTitle').textContent = T('set_title');
   updateSaveBtn();
-  const tabs = [['timer','tab_timer'],['appear','tab_appear'],['comp','tab_comp'],['subjects','tab_subjects'],['lang','tab_lang'],['data','tab_data']];
+  // Profile tab only when logged in
+  const loggedIn = typeof window.fbUserId === 'function' && window.fbUserId();
+  const tabs = [];
+  if(loggedIn) tabs.push(['profile','tab_profile']);
+  tabs.push(['timer','tab_timer'],['appear','tab_appear'],['comp','tab_comp'],['subjects','tab_subjects'],['lang','tab_lang'],['data','tab_data']);
+  if(!loggedIn && setTab === 'profile') setTab = 'timer';
   const tb = document.getElementById('setTabs');
   tb.innerHTML = tabs.map(([id,k]) => `<button class="set-tab${setTab === id ? ' on' : ''}" data-t="${id}">${esc(T(k))}</button>`).join('');
   tb.querySelectorAll('.set-tab').forEach(b => b.onclick = () => { setTab = b.dataset.t; renderSettings(); });
   const body = document.getElementById('setBody');
-  if(setTab === 'timer') body.innerHTML = paneTimer();
+  if(setTab === 'profile') body.innerHTML = paneProfile();
+  else if(setTab === 'timer') body.innerHTML = paneTimer();
   else if(setTab === 'appear') body.innerHTML = paneAppear();
   else if(setTab === 'comp') body.innerHTML = paneComp();
   else if(setTab === 'subjects') body.innerHTML = paneSubjects();
   else if(setTab === 'lang') body.innerHTML = paneLang();
   else if(setTab === 'data') body.innerHTML = paneData();
   wireSettings();
+}
+
+/* ---- Profile pane (account, photo, username, email, weekly goal, logout) ---- */
+function paneProfile(){
+  const p = (typeof window.fbMyProfile === 'function') ? window.fbMyProfile() : null;
+  if(!p) return `<div class="set-pane on"><div style="padding:1.5rem;text-align:center;color:var(--muted)">${esc(T('home_social_login_d'))}</div></div>`;
+  const av = (typeof window.fbAvatarHTML === 'function') ? window.fbAvatarHTML(p.username, p.avatar_url, 96) : '';
+  return `<div class="set-pane on">
+    <div class="set-profile">
+      <div class="set-profile-photo">${av}<button class="set-photo-btn" id="setPhotoBtn">${esc(T('set_change_photo'))}</button><input type="file" id="setPhotoFile" accept="image/*" style="display:none">${p.avatar_url ? `<button class="set-photo-clear" id="setPhotoClear">${esc(T('set_remove_photo'))}</button>` : ''}</div>
+      <div class="set-profile-fields">
+        <div class="set-field"><label class="set-field-lbl">${esc(T('set_username'))}</label><input class="txt-input" id="setUsername" maxlength="30" value="${esc(p.username || '')}" autocomplete="off"></div>
+        <div class="set-field"><label class="set-field-lbl">${esc(T('set_email'))}</label><div class="set-field-readonly">${esc(p.email || (typeof _currentUser !== 'undefined' && _currentUser ? _currentUser.email : ''))}</div></div>
+      </div>
+    </div>
+    ${rowStepper('weeklyGoal', T('set_weekgoal'), T('set_weekgoal_s'), _t.weeklyGoal || 15, 1, 70, 1)}
+    <button class="set-logout-btn" id="setLogoutBtn">${esc(T('logout'))}</button>
+  </div>`;
 }
 
 function rowStepper(id, lbl, sub, val, min, max, step){
@@ -234,6 +259,47 @@ function wireSettings(){
     sai.onclick = addSettSubj;
     siin.onkeydown = (e) => { if(e.key === 'Enter'){ e.preventDefault(); addSettSubj(); } };
   }
+  // profile pane wiring
+  const photoBtn = body.querySelector('#setPhotoBtn');
+  const photoFile = body.querySelector('#setPhotoFile');
+  const photoClear = body.querySelector('#setPhotoClear');
+  const userInp = body.querySelector('#setUsername');
+  const logoutBtn = body.querySelector('#setLogoutBtn');
+  if(photoBtn && photoFile){
+    photoBtn.onclick = () => photoFile.click();
+    photoFile.onchange = (e) => {
+      const f = e.target.files[0]; if(!f) return;
+      const rd = new FileReader();
+      rd.onload = () => resizePhoto(rd.result, async (data) => {
+        try { await window.updateMyProfile({ avatar_url: data }); banner(T('settings_saved') + ' ✓'); renderSettings(); }
+        catch(err){ banner(err.message || 'Error'); }
+      }, 256);
+      rd.readAsDataURL(f);
+    };
+  }
+  if(photoClear){
+    photoClear.onclick = async () => {
+      try { await window.updateMyProfile({ avatar_url: '' }); renderSettings(); }
+      catch(err){ banner(err.message || 'Error'); }
+    };
+  }
+  if(userInp){
+    let _utimer = null;
+    userInp.oninput = () => {
+      if(_utimer) clearTimeout(_utimer);
+      _utimer = setTimeout(async () => {
+        const v = userInp.value.trim();
+        if(!v || v.length < 2) return;
+        try { await window.updateMyProfile({ username: v }); } catch(err){}
+      }, 800);
+    };
+  }
+  if(logoutBtn){
+    logoutBtn.onclick = async () => {
+      if(typeof window.handleLogout === 'function'){ await window.handleLogout(); closeSettings(); }
+    };
+  }
+
   // data
   const ex = body.querySelector('#dataExport'); if(ex) ex.onclick = exportData;
   const im = body.querySelector('#dataImport'), imf = body.querySelector('#importFile');
@@ -254,14 +320,14 @@ function applyLive(){
 }
 
 /* ---- downscale uploaded photo to keep storage small ---- */
-function resizePhoto(dataUrl, cb){
+function resizePhoto(dataUrl, cb, maxOverride){
   const img = new Image();
   img.onload = () => {
-    const max = 1280; let {width:w, height:h} = img;
+    const max = maxOverride || 1280; let {width:w, height:h} = img;
     if(w > max || h > max){ const r = Math.min(max/w, max/h); w = Math.round(w*r); h = Math.round(h*r); }
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     cv.getContext('2d').drawImage(img, 0, 0, w, h);
-    cb(cv.toDataURL('image/jpeg', 0.82));
+    cb(cv.toDataURL('image/jpeg', maxOverride ? 0.86 : 0.82));
   };
   img.onerror = () => cb(dataUrl);
   img.src = dataUrl;

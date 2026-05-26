@@ -3,7 +3,7 @@
    Cache-first strategy. Cache version: focusblock-v2.
    ══════════════════════════════════════════════════════ */
 
-const CACHE = 'focusblock-v2';
+const CACHE = 'focusblock-v4';
 
 const PRECACHE = [
   './',
@@ -14,6 +14,10 @@ const PRECACHE = [
   './css/layout.css',
   './css/components.css',
   './css/mobile.css',
+  './css/auth.css',
+  './css/friends.css',
+  './css/social.css',
+  './css/nav.css',
   './data/default-settings.js',
   './js/state.js',
   './js/storage.js',
@@ -25,6 +29,12 @@ const PRECACHE = [
   './js/progress.js',
   './js/settings.js',
   './js/app.js',
+  './js/supabaseClient.js',
+  './js/auth.js',
+  './js/sessions.js',
+  './js/friends.js',
+  './js/status.js',
+  './js/leaderboard.js',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png'
 ];

@@ -54,7 +54,7 @@ async function _loadData() {
 
   // Profielen + sessies parallel
   const [profRes, sessRes] = await Promise.all([
-    supabase.from('profiles').select('id, username').in('id', allIds),
+    supabase.from('profiles').select('id, username, avatar_url').in('id', allIds),
     supabase.from('study_sessions')
       .select('user_id, minutes, completed_at')
       .in('user_id', allIds)
@@ -63,7 +63,7 @@ async function _loadData() {
   ]);
 
   const pm = {};
-  (profRes.data || []).forEach(p => { pm[p.id] = p.username; });
+  (profRes.data || []).forEach(p => { pm[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
 
   const todayMins = {}, weekMins = {};
   allIds.forEach(id => { todayMins[id] = 0; weekMins[id] = 0; });
@@ -118,7 +118,8 @@ async function renderLeaderboard() {
   const entries = allIds
     .map(id => ({
       id,
-      username: pm[id] || '?',
+      username: pm[id]?.username || '?',
+      avatar:   pm[id]?.avatar_url || '',
       mins:     minsField[id] || 0,
       isMe:     id === userId
     }))
@@ -141,7 +142,7 @@ async function renderLeaderboard() {
         return `
           <div class="lb-row ${e.isMe ? 'lb-me' : ''} ${e.mins === 0 ? 'lb-zero' : ''}">
             <div class="lb-rank">${rank}</div>
-            <div class="lb-avatar">${e.username[0].toUpperCase()}</div>
+            <div class="lb-avatar-wrap">${(typeof window.fbAvatarHTML==='function') ? window.fbAvatarHTML(e.username, e.avatar, 34) : `<div class="lb-avatar">${e.username[0].toUpperCase()}</div>`}</div>
             <div class="lb-info">
               <div class="lb-name">
                 ${_esc(e.username)}
@@ -174,3 +175,4 @@ setInterval(() => {
 window.openLeaderboard  = openLeaderboard;
 window.closeLeaderboard = closeLeaderboard;
 window.switchLbTab      = switchLbTab;
+window.fbLoadLeaderboard = _loadData;   // used by the Stats & friends page

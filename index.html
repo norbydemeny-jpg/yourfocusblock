@@ -25,12 +25,72 @@
   <link rel="stylesheet" href="./css/auth.css">
   <link rel="stylesheet" href="./css/friends.css">
   <link rel="stylesheet" href="./css/social.css">
+  <link rel="stylesheet" href="./css/nav.css">
 </head>
 <body>
 
 <div id="atmos"></div>
 <div id="bgPhoto"></div>
 <div class="banner" id="banner"></div>
+
+<!-- ════════ GLOBAL TOP NAVIGATION ════════ -->
+<nav class="topnav" id="topnav">
+  <div class="topnav-inner">
+    <button class="nav-logo" onclick="goHome()" aria-label="FocusBlock">
+      <span class="logo-dot"></span><span class="nav-logo-txt">FocusBlock</span>
+    </button>
+
+    <div class="nav-tabs" id="navTabs">
+      <button class="nav-tab" data-nav="today" onclick="goToday()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span id="navTodayLbl">Today</span>
+      </button>
+      <button class="nav-tab" data-nav="overview" onclick="goOverview()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12 L12 5"/><path d="M12 12 L17 14"/></svg>
+        <span id="navOverviewLbl">Day overview</span>
+      </button>
+      <button class="nav-tab" data-nav="agenda" onclick="goAgenda()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+        <span id="navAgendaLbl">Agenda</span>
+      </button>
+      <button class="nav-tab" data-nav="progress" onclick="goProgress('nav')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
+        <span class="nav-lbl-full" id="navStatsLbl">Stats &amp; friends</span>
+        <span class="nav-lbl-short" id="navStatsLblShort">Stats</span>
+      </button>
+    </div>
+
+    <div class="nav-right">
+      <button class="nav-plan-btn" onclick="startMode('day')" id="navPlanBtn">＋ Plan day</button>
+      <div class="leaderboard-area" id="lbAreaNav"></div>
+      <div class="friends-area" id="friendsAreaNav"></div>
+      <button class="icon-btn nav-set-btn" onclick="openSettings()" title="Settings" id="navSetBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <div class="auth-area" id="authAreaNav"></div>
+    </div>
+  </div>
+</nav>
+
+<!-- ════════ MOBILE BOTTOM NAVIGATION ════════ -->
+<nav class="botnav" id="botnav">
+  <button class="botnav-tab" data-nav="today" onclick="goToday()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    <span id="botTodayLbl">Today</span>
+  </button>
+  <button class="botnav-tab" data-nav="overview" onclick="goOverview()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12 L12 5"/><path d="M12 12 L17 14"/></svg>
+    <span id="botOverviewLbl">Overview</span>
+  </button>
+  <button class="botnav-tab" data-nav="agenda" onclick="goAgenda()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>
+    <span id="botAgendaLbl">Agenda</span>
+  </button>
+  <button class="botnav-tab" data-nav="progress" onclick="goProgress('nav')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="20" x2="6" y2="13"/><line x1="12" y1="20" x2="12" y2="7"/><line x1="18" y1="20" x2="18" y2="10"/></svg>
+    <span id="botStatsLbl">Stats</span>
+  </button>
+</nav>
 
 <!-- ════════ HOME / START ════════ -->
 <div class="screen" id="home">
@@ -54,12 +114,17 @@
       <div class="home-title" id="homeTitle">Plan your day.<br><em>Own your focus.</em></div>
       <div class="home-sub" id="homeSub">Pick how you want to start. You don't have to study all day — just a few focused blocks, done well.</div>
     </div>
-    <!-- Actieve vrienden widget — gevuld door status.js -->
-    <div class="active-friends-widget" id="activeFriendsWidget" style="display:none"></div>
     <div class="cards fade-in" id="startCards"></div>
+    <!-- Home social — who is studying, friends, motivation (filled by app.js/status.js) -->
+    <div class="home-social-wrap fade-in" id="homeSocial"></div>
     <div class="home-foot-note" id="homeFootNote"></div>
     <div class="home-motiv" id="homeMotiv"></div>
   </div>
+</div>
+
+<!-- ════════ DAGOVERZICHT (day overview dashboard) ════════ -->
+<div class="screen out" id="overview">
+  <div class="ov-wrap" id="ovWrap"></div>
 </div>
 
 <!-- ════════ FLOW (onboarding & planners) ════════ -->
@@ -87,16 +152,12 @@
         <div class="ps-lbl" id="psStartLbl">Start</div>
         <div class="ps-val"><input type="time" id="plnStartInput" oninput="onPlnStartChange()" /></div>
       </div>
-      <div class="ps-item" id="psUntil">
-        <div class="ps-lbl" id="psUntilLbl">Until</div>
-        <div class="ps-val"><input type="time" id="plnEndInput" oninput="onPlnEndChange()" /></div>
-      </div>
       <div class="ps-item">
         <div class="ps-lbl" id="psPlannedLbl">Planned</div>
         <div class="ps-val" id="psPlannedVal">—</div>
       </div>
       <div class="ps-item">
-        <div class="ps-lbl" id="psDoneLbl">Done by</div>
+        <div class="ps-lbl" id="psDoneLbl">End time</div>
         <div class="ps-val" id="psDoneVal">—</div>
       </div>
     </div>
@@ -119,20 +180,7 @@
 
 <!-- ════════ AGENDA ════════ -->
 <div class="screen out" id="agenda">
-  <div class="agenda-wrap">
-    <div class="agenda-head">
-      <button class="agenda-back-btn" onclick="backFromAgenda()" id="agendaBackLbl">← Terug</button>
-      <div class="agenda-title" id="agendaTitleEl">Agenda</div>
-      <button class="agenda-add-btn" onclick="openExamModal()" id="agendaAddBtn">+ Examen</button>
-    </div>
-    <div class="agenda-nav">
-      <button class="agenda-nav-btn" onclick="agendaNavMonth(-1)">‹</button>
-      <div class="agenda-month-lbl" id="agendaMonthLbl"></div>
-      <button class="agenda-nav-btn" onclick="agendaNavMonth(1)">›</button>
-    </div>
-    <div class="agenda-cal" id="agendaCal"></div>
-    <div class="agenda-day-detail" id="agendaDayDetail"></div>
-  </div>
+  <div class="agenda-wrap" id="agendaWrap"></div>
 </div>
 
 <!-- Exam add/edit modal -->
@@ -170,6 +218,12 @@
         <div class="db-blocks" id="dbBlocks"></div>
         <div class="db-info" id="dbInfo"></div>
         <div class="db-right">
+          <button class="collapse-btn mob-only" id="mobPlanBtn" onclick="openPlanning()" title="Planning" aria-label="Planning">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button class="collapse-btn desktop-only" id="zenBtnDesk" onclick="enterZen()" title="Fullscreen focus" aria-label="Fullscreen focus">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          </button>
           <button class="collapse-btn desktop-only" id="collapseBtn" onclick="toggleCollapse()" title="Collapse planning">⇥</button>
         </div>
       </div>
@@ -221,9 +275,10 @@
       <div class="rc-foot">
         <div class="quick-add-label" id="quickAddLabel">Quick add</div>
         <div class="quick-add-row">
-          <button class="quick-add-btn" onclick="addQuickBlock(25)">＋ 25 min</button>
-          <button class="quick-add-btn" onclick="addQuickBlock(50)">＋ 50 min</button>
-          <button class="quick-add-btn pause" onclick="addQuickPause()" id="quickPauseBtn">⏸ Pause</button>
+          <button class="quick-add-btn" onclick="addQuickBlock(25)" id="qa25"></button>
+          <button class="quick-add-btn" onclick="addQuickBlock(50)" id="qa50"></button>
+          <button class="quick-add-btn pause" onclick="addQuickPause('short')" id="qaShort"></button>
+          <button class="quick-add-btn pause" onclick="addQuickPause('long')" id="qaLong"></button>
         </div>
         <button class="add-block-btn" id="addBlockBtn" onclick="addBlock()">+ Add session</button>
         <button class="rc-build" id="rcBuild" onclick="goProgress('app')" title="Your study village">

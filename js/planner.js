@@ -659,9 +659,9 @@ function backFromPlanner(){
 
 /* ---- Calculate per-block start/end times from D.bb + plannerStartTime ---- */
 function plnCalcTimes(){
-  const [h, m] = plannerStartTime.split(':').map(Number);
-  let cursor = h * 60 + (m || 0);
-  return D.bb.map(b => {
+  const [h, m] = (plannerStartTime || '09:00').split(':').map(Number);
+  let cursor = (h || 0) * 60 + (m || 0);
+  return (D.bb || []).map(b => {
     const start = cursor;
     cursor += (b.mins || 5);
     return { startMin: start, endMin: cursor };
@@ -681,9 +681,8 @@ function renderPlanner(){
   document.getElementById('plnBackLbl').textContent = T('back');
   document.getElementById('plnDupBtn').title = T('dpl_duplicate');
   document.getElementById('psStartLbl').textContent = T('dpl_start');
-  document.getElementById('psUntilLbl').textContent = T('dpl_until');
   document.getElementById('psPlannedLbl').textContent = T('dpl_planned');
-  document.getElementById('psDoneLbl').textContent = T('dpl_done_by');
+  document.getElementById('psDoneLbl').textContent = T('dpl_endtime');
   document.getElementById('pqLabel').textContent = T('dpl_quick_blocks');
   document.getElementById('pqF25').textContent = T('dpl_add_focus_25');
   document.getElementById('pqF50').textContent = T('dpl_add_focus_50');
@@ -806,7 +805,9 @@ function onPlnStartChange(){
   renderPlanner();
 }
 function onPlnEndChange(){
-  plannerEndTime = document.getElementById('plnEndInput').value || '';
+  const el = document.getElementById('plnEndInput');
+  if(!el) return;
+  plannerEndTime = el.value || '';
   renderPlanner();
 }
 
@@ -1029,7 +1030,7 @@ function startFromPlanner(){
 
   // If planning for a future date (from agenda), save to dayPlans instead of starting
   if(_planningForDate && _planningForDate !== todayStr()){
-    dayPlans[_planningForDate] = blocks.map(b => ({...b}));
+    dayPlans[_planningForDate] = { startTime: plannerStartTime || '09:00', blocks: blocks.map(b => ({...b})) };
     _planningForDate = null;
     D.bb = [];
     saveData();

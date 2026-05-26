@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS = {
   short:        10,
   long:         25,
   longAfter:    4,
+  weeklyGoal:   15,
   theme:        'lime',
   light:        false,
   sound:        'soft',
