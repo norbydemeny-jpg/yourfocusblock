@@ -42,14 +42,17 @@ async function _refreshFriendsCacheSilent(){
 // ══════════════════════════════════════════════════════
 
 async function searchUsers(query) {
-  const userId = await getCurrentUserId();
+  const userId = getCurrentUserId();
   if (!userId || query.trim().length < 2) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('id, username, avatar_url')
     .ilike('username', `%${query.trim()}%`)
     .neq('id', userId)
     .limit(8);
+  if (error) {
+    console.error('[Friends] searchUsers database error:', error.message);
+  }
   return data || [];
 }
 
@@ -410,15 +413,17 @@ function renderRequests(container, requests) {
   </div>`;
 }
 
-// ── Zoeken ─────────────────────────────────────────────
 function renderSearch(container) {
+  if (document.getElementById('frSearchInput')) {
+    return;
+  }
   container.innerHTML = `
     <div class="fr-search-wrap">
       <input type="text" id="frSearchInput" class="txt-input" placeholder="${T('fr_search_ph')}"
         value="${escHtml(_searchQuery)}" oninput="handleFrSearch(this.value)" autocomplete="off" />
     </div>
     <div id="frSearchResults"></div>`;
-  setTimeout(() => document.getElementById('frSearchInput')?.focus(), 50);
+  document.getElementById('frSearchInput')?.focus();
   if (_searchQuery) renderSearchResults(document.getElementById('frSearchResults'), _searchResults);
 }
 
