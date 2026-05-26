@@ -1167,10 +1167,27 @@ function agendaSetView(v){ _agendaView = v; renderAgenda(); }
 function agendaGoToday(){ agendaViewDate = new Date(); renderAgenda(); }
 function agendaNav(dir){
   if(!agendaViewDate) agendaViewDate = new Date();
-  if(_agendaView === 'week') agendaViewDate.setDate(agendaViewDate.getDate() + dir*7);
-  else agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
+  const isMobile = window.innerWidth <= 760;
+  if(_agendaView === 'week') {
+    // Op mobiel verschuiven we per dag, op desktop per week.
+    agendaViewDate.setDate(agendaViewDate.getDate() + dir*(isMobile ? 1 : 7));
+  } else {
+    agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
+  }
   renderAgenda();
 }
+function agendaShiftDay(dir){
+  if(!agendaViewDate) agendaViewDate = new Date();
+  agendaViewDate.setDate(agendaViewDate.getDate() + dir);
+  renderAgenda();
+}
+function agendaFocusDay(dateStr){
+  // Schakelt enkel de focus-dag op de mobiele dag-view zonder een modal te openen.
+  agendaViewDate = new Date(dateStr + 'T12:00:00');
+  renderAgenda();
+}
+window.agendaFocusDay = agendaFocusDay;
+window.agendaShiftDay = agendaShiftDay;
 function agendaNavMonth(dir){
   if(!agendaViewDate) agendaViewDate = new Date();
   agendaViewDate.setMonth(agendaViewDate.getMonth() + dir);
@@ -1275,9 +1292,16 @@ function _agDayItems(dateStr){
   if(dateStr === todayStr() && blocks.length){ plan = blocks; startTime = plannerStartTime || '09:00'; }
   else { const dp = _getDayPlan(dateStr); if(dp){ plan = dp.blocks; startTime = dp.startTime || '09:00'; } }
   if(plan){
-    const [h,m] = startTime.split(':').map(Number); let cur = (h||0)*60 + (m||0);
+    const [h,m] = startTime.split(':').map(Number);
+    let cur = (h||0)*60 + (m||0);
     plan.forEach((b,i) => {
       const mins = b.mins || 25;
+      // Als een blok een eigen startMin heeft (van een drag-to-move actie),
+      // gebruik die absolute tijd en herstart de chain vanaf daar. Andere
+      // blokken voor dit blok blijven dus ongewijzigd staan.
+      if(typeof b.startMin === 'number'){
+        cur = b.startMin;
+      }
       items.push({
         kind: b.isPause ? 'pause' : 'focus',
         startMin: cur, endMin: cur+mins,
@@ -1330,7 +1354,13 @@ function _agWireDrag(){
       el.addEventListener('pointerdown', (e) => {
         if(e.button && e.button !== 0) return;
         const rect = el.getBoundingClientRect();
-        const isResize = (e.clientY - rect.top) > (rect.height - 18); // grotere touch-zone
+        const yIn  = e.clientY - rect.top;
+        // 3 zones: bovenste 18px = resize-top, onderste 18px = resize-bottom, midden = move.
+        const RZ = 18;
+        let mode;
+        if(yIn < RZ)                       mode = 'resize-top';
+        else if(yIn > rect.height - RZ)    mode = 'resize-bottom';
+        else                                mode = 'move';
         e.preventDefault(); e.stopPropagation();
         try { el.setPointerCapture(e.pointerId); } catch {}
 
@@ -1339,21 +1369,30 @@ function _agWireDrag(){
         const startTop    = parseFloat(el.style.top) || 0;
         const timeEl = el.querySelector('.agb-time');
         let movedFar = false;
-        const mode = isResize ? 'resize' : 'move';
         el.classList.add('ag-block-dragging', 'ag-block-' + mode);
+
+        const snapPx = HOUR_PX / 12; // 5-min raster
 
         const onMove = (ev) => {
           const dy = ev.clientY - startY;
           if(Math.abs(dy) > DRAG_THRESHOLD) movedFar = true;
-          if(mode === 'resize'){
+          if(mode === 'resize-bottom'){
             const newH = Math.max(22, startHeight + dy);
             el.style.height = newH + 'px';
             const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
             if(timeEl) timeEl.textContent = mins + ' min';
+          } else if(mode === 'resize-top'){
+            // Top resize: top schuift, height verandert tegenovergesteld.
+            const snappedDy = Math.round(dy / snapPx) * snapPx;
+            const newTop = Math.max(0, startTop + snappedDy);
+            const newH   = Math.max(22, startHeight - snappedDy);
+            el.style.top = newTop + 'px';
+            el.style.height = newH + 'px';
+            const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+            if(timeEl) timeEl.textContent = mins + ' min';
           } else {
-            // Move: schuif top, gesnapt aan 5-minuten raster (≈ HOUR_PX/12 px).
-            const snap = HOUR_PX / 12;
-            const newTop = Math.max(0, Math.min(HOURS*HOUR_PX - startHeight, startTop + Math.round(dy/snap)*snap));
+            // Move: schuif top, gesnapt aan 5-min raster.
+            const newTop = Math.max(0, Math.min(HOURS*HOUR_PX - startHeight, startTop + Math.round(dy/snapPx)*snapPx));
             el.style.top = newTop + 'px';
           }
         };
@@ -1362,26 +1401,32 @@ function _agWireDrag(){
           el.removeEventListener('pointermove', onMove);
           el.removeEventListener('pointerup', onUp);
           el.removeEventListener('pointercancel', onUp);
-          el.classList.remove('ag-block-dragging', 'ag-block-resize', 'ag-block-move');
-          if(!movedFar){ el.style.top = startTop + 'px'; el.style.height = startHeight + 'px'; return; }
-          if(mode === 'resize'){
-            const dy = ev.clientY - startY;
-            const newH = Math.max(22, startHeight + dy);
+          el.classList.remove('ag-block-dragging', 'ag-block-resize-top', 'ag-block-resize-bottom', 'ag-block-move');
+          if(!movedFar){
+            el.style.top = startTop + 'px';
+            el.style.height = startHeight + 'px';
+            return;
+          }
+          if(mode === 'resize-bottom'){
+            const newH = Math.max(22, parseFloat(el.style.height) || startHeight);
             const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
             _agCommitBlockMins(date, +bidx, mins);
-            renderAgenda();
-            if(typeof banner === 'function') banner(mins + ' min ✓');
+          } else if(mode === 'resize-top'){
+            const newTop = parseFloat(el.style.top) || 0;
+            const newH   = parseFloat(el.style.height) || startHeight;
+            const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+            const minutesFromStart = Math.round((newTop / HOUR_PX) * 60 / 5) * 5;
+            const newStartTotalMin = (window._agHourStartMin || 360) + minutesFromStart;
+            _agCommitBlockMins(date, +bidx, mins);
+            _agCommitBlockStart(date, +bidx, newStartTotalMin);
           } else {
-            // Bereken nieuw startuur: top px → minuten t.o.v. HOUR_START.
             const newTop = parseFloat(el.style.top) || 0;
             const minutesFromStart = Math.round((newTop / HOUR_PX) * 60 / 5) * 5;
             const newStartTotalMin = (window._agHourStartMin || 360) + minutesFromStart;
             _agCommitBlockStart(date, +bidx, newStartTotalMin);
-            renderAgenda();
-            const hh = String(Math.floor(newStartTotalMin/60)).padStart(2,'0');
-            const mm = String(newStartTotalMin%60).padStart(2,'0');
-            if(typeof banner === 'function') banner(`${hh}:${mm} ✓`);
           }
+          renderAgenda();
+          if(typeof banner === 'function') banner('✓');
         };
         el.addEventListener('pointermove', onMove);
         el.addEventListener('pointerup', onUp);
@@ -1409,25 +1454,31 @@ function _agWireDrag(){
   });
 }
 
-// Stel het startuur van een dagplan zo bij dat het opgegeven blok exact op
-// newStartTotalMin begint. De andere blokken volgen automatisch.
+// Verzet ALLEEN het opgegeven blok naar newStartTotalMin. Andere blokken
+// blijven exact staan waar ze stonden — we 'pin'nen hun huidige positie
+// door op elk een expliciete startMin te zetten.
 function _agCommitBlockStart(dateStr, idx, newStartTotalMin){
   newStartTotalMin = Math.max(0, Math.min(24*60-5, Math.round(newStartTotalMin)));
   const isToday = dateStr === todayStr() && blocks.length;
   const plan = isToday ? blocks : (_getDayPlan(dateStr)?.blocks);
   if(!plan || !plan[idx]) return;
-  // Hoeveel minuten zit `idx` na het begin van het plan?
-  let offset = 0;
-  for(let i = 0; i < idx; i++) offset += (plan[i].mins || 25);
-  let newStartHH = Math.floor((newStartTotalMin - offset) / 60);
-  let newStartMM = ((newStartTotalMin - offset) % 60 + 60) % 60;
-  newStartHH = Math.max(0, Math.min(23, newStartHH));
-  const newStartTime = String(newStartHH).padStart(2,'0') + ':' + String(newStartMM).padStart(2,'0');
-  if(isToday){
-    plannerStartTime = newStartTime;
-  } else {
+
+  // Eerst: bereken de huidige effectieve positie van elk blok (zoals ze nu
+  // in _agDayItems berekend zou worden) zodat we ze kunnen 'pin'nen.
+  const startTime = isToday ? (plannerStartTime || '09:00') : (_getDayPlan(dateStr)?.startTime || '09:00');
+  const [sh, sm] = startTime.split(':').map(Number);
+  let cur = (sh||0)*60 + (sm||0);
+  plan.forEach((b, i) => {
+    if(typeof b.startMin === 'number') cur = b.startMin;
+    if(i !== idx && typeof b.startMin !== 'number') b.startMin = cur;
+    cur += (b.mins || 25);
+  });
+
+  // Nu het gesleepte blok op de nieuwe positie zetten.
+  plan[idx].startMin = newStartTotalMin;
+
+  if(!isToday){
     const dp = _getDayPlan(dateStr) || { blocks: plan, startTime: '09:00' };
-    dp.startTime = newStartTime;
     dayPlans[dateStr] = dp;
   }
   saveData();
@@ -1543,9 +1594,10 @@ function renderAgenda(){
   if(view === 'week'){
     const HOUR_START = 6, HOUR_END = 23;
     const HOURS = HOUR_END - HOUR_START;
-    // HOUR_PX is groter op smalle schermen zodat blokken (vooral pauzes)
-    // ruim genoeg zijn om aan te tikken. Wordt ook gebruikt door _agWireDrag.
-    const HOUR_PX = (typeof window !== 'undefined' && window.innerWidth <= 760) ? 78 : 64;
+    const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 760);
+    // Op mobiel grotere uren-cellen + alleen 1 dag per scherm zodat blokken
+    // de volle breedte krijgen en pauzes makkelijk tapbaar zijn.
+    const HOUR_PX = isMobile ? 84 : 64;
     window._agHourPx     = HOUR_PX;
     window._agHourSpan   = HOURS;
     window._agHourStartMin = HOUR_START * 60;
@@ -1573,6 +1625,7 @@ function renderAgenda(){
         const bd = isPause ? '#818cf8' : it.color;
         const idAttr = isExam ? `data-exam-id="${esc(it.id||'')}"` : (it.blockIdx != null ? `data-bidx="${it.blockIdx}"` : '');
         return `<div class="ag-block ag-block-${it.kind}" data-date="${dy.ds}" ${idAttr} style="top:${top}px;height:${heightPx}px;background:${bg};border-left-color:${bd}">
+          ${!isExam ? `<div class="ag-block-resize-top"></div>` : ''}
           <div class="agb-name">${esc(it.name)}</div>
           ${isExam ? `<div class="agb-tag">${esc(T('agenda_exam_lbl').toUpperCase())}</div><div class="agb-time">${startStr} – ${endStr}</div>` : `<div class="agb-time">${it.endMin - it.startMin} min</div>`}
           ${!isExam ? `<div class="ag-block-resize" title="${esc(T('agenda_resize_hint'))}"></div>` : ''}
@@ -1583,17 +1636,73 @@ function renderAgenda(){
       return `<div class="ag-day-col ${dy.isToday?'is-today':''}" data-date="${dy.ds}" style="height:${HOURS*HOUR_PX}px" onclick="agendaOpenDay('${dy.ds}')">${lines}${blocksHtml}</div>`;
     }).join('');
 
-    mainHtml = `
-      <div class="ag-week">
-        <div class="ag-week-head">
-          <div class="ag-hgut"></div>
-          ${dayHdrs}
-        </div>
-        <div class="ag-week-body" style="height:${HOURS*HOUR_PX}px">
-          <div class="ag-time-gutter" style="height:${HOURS*HOUR_PX}px">${hoursHtml}</div>
-          ${dayCols}
-        </div>
-      </div>`;
+    if (isMobile) {
+      // ─── Mobile single-day view ────────────────────────
+      // Toon één dag op vol scherm met een swipeable day-tab-row erboven.
+      // Geen horizontaal scrollen, blokken nemen de volle breedte.
+      const focusDs = _agIsoDate(focusDate);
+      const focusDay = days.find(d => d.ds === focusDs) || days[0];
+      const dayTabs = days.map((dy, i) => {
+        const isFocus = dy.ds === focusDay.ds;
+        const isExam = examDates.some(e => e.date === dy.ds);
+        const hasPlan = !!dayPlans[dy.ds] || (dy.isToday && blocks.length > 0);
+        const dnLbl = dn[i];
+        return `<button class="ag-mob-daytab${isFocus?' is-focus':''}${dy.isToday?' is-today':''}" data-ds="${dy.ds}" onclick="agendaFocusDay('${dy.ds}')">
+          <span class="agm-tab-lbl">${dnLbl}</span>
+          <span class="agm-tab-num">${dy.d.getDate()}</span>
+          ${hasPlan || isExam ? `<span class="agm-tab-marks">${hasPlan?'<span class="agm-tab-dot plan"></span>':''}${isExam?'<span class="agm-tab-dot exam"></span>':''}</span>` : ''}
+        </button>`;
+      }).join('');
+      const items = _agDayItems(focusDay.ds);
+      const blocksHtml = items.map(it => {
+        const top = Math.max(0, ((it.startMin - startMinTotal)/totalMin) * (HOURS * HOUR_PX));
+        const heightPx = Math.max(38, ((it.endMin - it.startMin)/totalMin) * (HOURS * HOUR_PX) - 4);
+        const isPause = it.kind === 'pause';
+        const isExam  = it.kind === 'exam';
+        const startStr = `${String(Math.floor(it.startMin/60)%24).padStart(2,'0')}:${String(it.startMin%60).padStart(2,'0')}`;
+        const endStr   = `${String(Math.floor(it.endMin/60)%24).padStart(2,'0')}:${String(it.endMin%60).padStart(2,'0')}`;
+        const bg = isPause ? 'rgba(129,140,248,0.18)' : (isExam ? `color-mix(in srgb, ${it.color} 30%, var(--bg2))` : `color-mix(in srgb, ${it.color} 32%, var(--bg2))`);
+        const bd = isPause ? '#818cf8' : it.color;
+        const idAttr = isExam ? `data-exam-id="${esc(it.id||'')}"` : (it.blockIdx != null ? `data-bidx="${it.blockIdx}"` : '');
+        return `<div class="ag-block ag-block-${it.kind}" data-date="${focusDay.ds}" ${idAttr} style="top:${top}px;height:${heightPx}px;background:${bg};border-left-color:${bd}">
+          ${!isExam ? `<div class="ag-block-resize-top"></div>` : ''}
+          <div class="agb-name">${esc(it.name)}</div>
+          ${isExam ? `<div class="agb-tag">${esc(T('agenda_exam_lbl').toUpperCase())}</div><div class="agb-time">${startStr} – ${endStr}</div>` : `<div class="agb-time">${startStr} · ${it.endMin - it.startMin} min</div>`}
+          ${!isExam ? `<div class="ag-block-resize" title="${esc(T('agenda_resize_hint'))}"></div>` : ''}
+        </div>`;
+      }).join('');
+      let lines = '';
+      for(let h = 1; h < HOURS; h++) lines += `<div class="ag-hr-line" style="top:${h*HOUR_PX}px"></div>`;
+      const dayFullLbl = focusDay.d.toLocaleDateString(lang, {weekday:'long', day:'numeric', month:'long'});
+      mainHtml = `
+        <div class="ag-mob">
+          <div class="ag-mob-daytabs">${dayTabs}</div>
+          <div class="ag-mob-dayhdr">
+            <button class="ag-mob-prev" onclick="agendaShiftDay(-1)" aria-label="prev">‹</button>
+            <span class="ag-mob-dayttl">${esc(dayFullLbl.charAt(0).toUpperCase() + dayFullLbl.slice(1))}</span>
+            <button class="ag-mob-next" onclick="agendaShiftDay(1)" aria-label="next">›</button>
+          </div>
+          <div class="ag-mob-body" style="height:${HOURS*HOUR_PX}px">
+            <div class="ag-time-gutter" style="height:${HOURS*HOUR_PX}px">${hoursHtml}</div>
+            <div class="ag-day-col is-today-${focusDay.isToday}" data-date="${focusDay.ds}" style="height:${HOURS*HOUR_PX}px">${lines}${blocksHtml}</div>
+          </div>
+          <button class="ag-plan-day-btn" style="width:100%;margin-top:12px;" onclick="${focusDay.ds === today ? `goToday()` : `editDayPlan('${focusDay.ds}')`}">
+            ＋ ${esc(T('agenda_plan_day') || 'Plan deze dag')}
+          </button>
+        </div>`;
+    } else {
+      mainHtml = `
+        <div class="ag-week">
+          <div class="ag-week-head">
+            <div class="ag-hgut"></div>
+            ${dayHdrs}
+          </div>
+          <div class="ag-week-body" style="height:${HOURS*HOUR_PX}px">
+            <div class="ag-time-gutter" style="height:${HOURS*HOUR_PX}px">${hoursHtml}</div>
+            ${dayCols}
+          </div>
+        </div>`;
+    }
   } else {
     let cells = dn.map(n => `<div class="agmo-hdr">${n.slice(0,2)}</div>`).join('');
     const offset = (first.getDay()+6)%7;

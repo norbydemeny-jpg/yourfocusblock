@@ -1,9 +1,11 @@
 /* ══════════════════════════════════════════════════════
    FocusBlock — service-worker.js
-   Cache-first strategy. Cache version: focusblock-v2.
+   Network-first voor app-code (HTML/JS/CSS) zodat users
+   altijd de laatste versie zien, cache-fallback offline.
+   Cache-first voor static assets (icons/sounds/images).
    ══════════════════════════════════════════════════════ */
 
-const CACHE = 'focusblock-v10';
+const CACHE = 'focusblock-v11';
 
 const PRECACHE = [
   './',
@@ -43,12 +45,12 @@ const PRECACHE = [
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(cache => cache.addAll(PRECACHE))
+      .then(cache => cache.addAll(PRECACHE).catch(() => {}))
       .then(() => self.skipWaiting())
   );
 });
 
-/* ── Activate: delete old caches ─────────────────────── */
+/* ── Activate: delete old caches + take control immediately ── */
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -57,26 +59,57 @@ self.addEventListener('activate', e => {
   );
 });
 
-/* ── Fetch: cache-first, network fallback ─────────────── */
-self.addEventListener('fetch', e => {
-  /* Only handle GET requests for same-origin or precached cross-origin */
-  if(e.request.method !== 'GET') return;
+/* ── Message handler: app kan om SKIP_WAITING vragen ─── */
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
+});
 
+/* ── Bepaal of dit een app-code-asset is (HTML/JS/CSS) ── */
+function isAppAsset(url){
+  return /\.(html|js|css)$/i.test(url.pathname) || url.pathname === '/' || url.pathname.endsWith('/');
+}
+
+/* ── Fetch strategie:
+   • App-code (HTML/JS/CSS): network-first, fallback naar cache
+       Zo zien gebruikers ALTIJD de laatste versie als ze online zijn.
+   • Static assets (icons/sounds): cache-first
+   • Externe origin (Supabase, CDN): bypass — direct network.
+   ─────────────────────────────────────────────────────── */
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+
+  // Externe API/CDN nooit cachen (Supabase, jsdelivr).
+  if (url.origin !== self.location.origin) return;
+
+  if (isAppAsset(url)) {
+    // Network-first
+    e.respondWith(
+      fetch(e.request)
+        .then(response => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            const clone = response.clone();
+            caches.open(CACHE).then(cache => cache.put(e.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(e.request).then(c => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Cache-first voor static assets (icons, sounds, images)
   e.respondWith(
     caches.match(e.request).then(cached => {
-      if(cached) return cached;
+      if (cached) return cached;
       return fetch(e.request).then(response => {
-        /* Cache valid responses (not opaque/error) */
-        if(response && response.status === 200 && response.type === 'basic'){
+        if (response && response.status === 200 && response.type === 'basic') {
           const clone = response.clone();
           caches.open(CACHE).then(cache => cache.put(e.request, clone));
         }
         return response;
       }).catch(() => {
-        /* Offline fallback: return index.html for navigation requests */
-        if(e.request.mode === 'navigate'){
-          return caches.match('./index.html');
-        }
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
       });
     })
   );

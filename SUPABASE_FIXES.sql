@@ -135,7 +135,33 @@ create policy "referrals_insert_self"
   with check (referrer_id = auth.uid() or invited_user_id = auth.uid());
 
 
--- ─── 6) BESTAANDE 'ONBEVESTIGDE' USERS BEVESTIGEN ───────────────────
+-- ─── 6) REALTIME — user_status publicatie ──────────────────────────
+--  Voor de live "vriend X is aan het studeren" widget. Voegt user_status
+--  toe aan de supabase_realtime publicatie zodat de client live changes
+--  ontvangt. Veilig om opnieuw te draaien.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'user_status'
+  ) then
+    execute 'alter publication supabase_realtime add table public.user_status';
+  end if;
+end $$;
+
+-- Voeg ook friendships toe zodat een nieuwe acceptatie meteen zichtbaar is.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'friendships'
+  ) then
+    execute 'alter publication supabase_realtime add table public.friendships';
+  end if;
+end $$;
+
+
+-- ─── 7) BESTAANDE 'ONBEVESTIGDE' USERS BEVESTIGEN ───────────────────
 --  Accounts die zijn aangemaakt VOOR jij email-confirmation uitzette
 --  hebben email_confirmed_at = NULL. Die kunnen niet inloggen omdat
 --  Supabase nog steeds confirmation eist voor die rijen.

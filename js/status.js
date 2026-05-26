@@ -230,6 +230,11 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   if (event === 'SIGNED_IN' && _myId) {
     await updateMyStatus('offline'); // begin als offline totdat timer start
     await loadFriendsAndSubscribe();
+  } else if (event === 'TOKEN_REFRESHED' && _myId) {
+    // Toegangstoken is ververst — herstart de realtime-subscription en
+    // herlaad friends/profile data zodat queries niet stilletjes leeg
+    // teruggeven met een verlopen token.
+    await loadFriendsAndSubscribe();
   } else if (event === 'SIGNED_OUT') {
     _myId = null;
     _friendIds = [];
@@ -237,13 +242,18 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     _statusMap = {};
     if (_channel) { supabase.removeChannel(_channel); _channel = null; }
     renderWidget([]);
-    // Leaderboard knop verbergen
     document.querySelectorAll('.leaderboard-area').forEach(el => { el.innerHTML = ''; });
   }
 
-  // Leaderboard knop tonen/verbergen
   _updateLbAreas(_myId);
 });
+
+// ── Periodieke refresh: zelfs zonder TOKEN_REFRESHED-event soms de
+//    friends data opnieuw ophalen zodat statuses/lijst niet vastlopen
+//    als een query stilletjes leeg teruggaf (RLS edge cases).
+setInterval(() => {
+  if (_myId && !document.hidden) loadFriendsAndSubscribe().catch(() => {});
+}, 3 * 60 * 1000);
 
 function _updateLbAreas(userId) {
   document.querySelectorAll('.leaderboard-area').forEach(area => {

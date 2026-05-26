@@ -11,12 +11,41 @@ let _searchQuery   = '';
 let _friendsExpanded = false;
 const FRIENDS_PREVIEW_COUNT = 5;
 
+// In-memory cache zodat de modal nooit terug naar 'Laden...' gaat als we
+// eerder al data hadden. Wordt gerefresht in de achtergrond.
+let _friendsCache  = null; // {friends, requests, ts}
+let _userIdCache   = null;
+
 // ── Auth helper ────────────────────────────────────────
 async function getCurrentUserId() {
+  if (_userIdCache) return _userIdCache;
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
+    _userIdCache = session?.user?.id ?? null;
+    return _userIdCache;
   } catch { return null; }
+}
+
+// Wis de cache wanneer auth-state verandert (login/logout/refresh).
+supabase.auth.onAuthStateChange((event, session) => {
+  _userIdCache = session?.user?.id ?? null;
+  if (event === 'SIGNED_OUT') _friendsCache = null;
+  // Bij TOKEN_REFRESHED of SIGNED_IN: cache niet wissen maar wel verversen.
+  if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+    // Trigger een silent refresh van de friends cache.
+    _refreshFriendsCacheSilent();
+  }
+});
+
+async function _refreshFriendsCacheSilent(){
+  try {
+    const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
+    _friendsCache = { friends, requests, ts: Date.now() };
+    // Re-render als modal open is.
+    if (document.getElementById('friendsOv')?.classList.contains('open')) {
+      renderFriendsModal();
+    }
+  } catch { /* stille fail — cache blijft staan */ }
 }
 
 // ══════════════════════════════════════════════════════
@@ -188,20 +217,35 @@ async function renderFriendsModal() {
   const titleEl = document.querySelector('#friendsOv .modal-title');
   if (titleEl) titleEl.textContent = T('fr_title');
 
-  body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">${T('fr_loading')}</div>`;
+  // Heb ik cached data? Render direct, ververs daarna stilletjes.
+  // Zo zien gebruikers nooit "Laden..." na de eerste keer dat ze hebben geladen.
+  const haveCache = _friendsCache && _friendsCache.friends;
+  if (!haveCache) {
+    body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">${T('fr_loading')}</div>`;
+  }
 
   try {
     const userId = await _withTimeout(getCurrentUserId(), 5000, 'session');
     if (!userId) {
+      _friendsCache = null;
       body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('fr_login_msg')}</p>`;
       return;
     }
 
-    const [friends, requests] = await _withTimeout(
-      Promise.all([getFriends(), getIncomingRequests()]),
-      10000,
-      'friends'
-    );
+    let friends, requests;
+    if (haveCache) {
+      // Toon meteen cache, ververs in achtergrond zonder loading-state.
+      friends  = _friendsCache.friends;
+      requests = _friendsCache.requests;
+      _refreshFriendsCacheSilent();
+    } else {
+      [friends, requests] = await _withTimeout(
+        Promise.all([getFriends(), getIncomingRequests()]),
+        10000,
+        'friends'
+      );
+      _friendsCache = { friends, requests, ts: Date.now() };
+    }
     const reqCount = requests.length;
 
     const friendIds = friends.map(f => f.friend_id);
@@ -437,6 +481,7 @@ async function handleAccept(friendshipId) {
   try {
     await acceptRequest(friendshipId);
     toast(T('fr_accepted'));
+    _friendsCache = null;        // cache invalideren — er is een nieuwe vriend
     renderFriendsModal();
     window.reloadFriendStatuses?.();
   } catch (e) { toast(Tf('fr_err', {msg: e.message})); }
@@ -445,6 +490,7 @@ async function handleAccept(friendshipId) {
 async function handleDecline(friendshipId) {
   try {
     await declineRequest(friendshipId);
+    _friendsCache = null;
     renderFriendsModal();
   } catch (e) { toast(Tf('fr_err', {msg: e.message})); }
 }
@@ -454,6 +500,7 @@ async function handleRemoveFriend(friendshipId, username) {
   try {
     await removeFriend(friendshipId);
     toast(Tf('fr_removed', {name: username}));
+    _friendsCache = null;
     renderFriendsModal();
     window.reloadFriendStatuses?.();
   } catch (e) { toast(Tf('fr_err', {msg: e.message})); }
