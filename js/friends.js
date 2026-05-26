@@ -43,7 +43,7 @@ async function _refreshFriendsCacheSilent(){
 
 async function searchUsers(query) {
   const userId = getCurrentUserId();
-  if (!userId || query.trim().length < 2) return [];
+  if (!userId || query.trim().length < 1) return [];
   const { data, error } = await supabase
     .from('profiles')
     .select('id, username, avatar_url')
@@ -249,25 +249,41 @@ async function renderFriendsModal() {
       .map(f => ({ ...f, status: statusMap[f.friend_id] || 'offline' }))
       .sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
 
-    body.innerHTML = `
-      <div class="fr-tabs">
-        <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">
-          ${T('fr_tab_list')}${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}
-        </button>
-        <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">
-          ${T('fr_tab_requests')}${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}
-        </button>
-        <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">${T('fr_tab_search')}</button>
-      </div>
-      <div id="frContent"></div>
-      <div class="fr-lb-link">
-        <button class="fr-lb-link-btn" onclick="closeFriendsModal();openLeaderboard()">${T('fr_open_lb')}</button>
-      </div>`;
-
-    const content = document.getElementById('frContent');
-    if (_friendsTab === 'list')          renderFriendsList(content, friendsWithStatus);
-    else if (_friendsTab === 'requests') renderRequests(content, requests);
-    else                                 renderSearch(content);
+    const existingContent = document.getElementById('frContent');
+    if (existingContent) {
+      const tabs = body.querySelectorAll('.fr-tab');
+      if (tabs.length >= 3) {
+        tabs[0].innerHTML = `${T('fr_tab_list')}${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}`;
+        tabs[0].className = `fr-tab ${_friendsTab === 'list' ? 'on' : ''}`;
+        
+        tabs[1].innerHTML = `${T('fr_tab_requests')}${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}`;
+        tabs[1].className = `fr-tab ${_friendsTab === 'requests' ? 'on' : ''}`;
+        
+        tabs[2].className = `fr-tab ${_friendsTab === 'search' ? 'on' : ''}`;
+      }
+      if (_friendsTab === 'list')          renderFriendsList(existingContent, friendsWithStatus);
+      else if (_friendsTab === 'requests') renderRequests(existingContent, requests);
+      else                                 renderSearch(existingContent);
+    } else {
+      body.innerHTML = `
+        <div class="fr-tabs">
+          <button class="fr-tab ${_friendsTab === 'list'     ? 'on' : ''}" onclick="switchFriendsTab('list')">
+            ${T('fr_tab_list')}${friends.length ? ` <span class="fr-badge">${friends.length}</span>` : ''}
+          </button>
+          <button class="fr-tab ${_friendsTab === 'requests' ? 'on' : ''}" onclick="switchFriendsTab('requests')">
+            ${T('fr_tab_requests')}${reqCount ? ` <span class="fr-badge fr-badge-alert">${reqCount}</span>` : ''}
+          </button>
+          <button class="fr-tab ${_friendsTab === 'search'   ? 'on' : ''}" onclick="switchFriendsTab('search')">${T('fr_tab_search')}</button>
+        </div>
+        <div id="frContent"></div>
+        <div class="fr-lb-link">
+          <button class="fr-lb-link-btn" onclick="closeFriendsModal();openLeaderboard()">${T('fr_open_lb')}</button>
+        </div>`;
+      const content = document.getElementById('frContent');
+      if (_friendsTab === 'list')          renderFriendsList(content, friendsWithStatus);
+      else if (_friendsTab === 'requests') renderRequests(content, requests);
+      else                                 renderSearch(content);
+    }
 
   } catch (e) {
     const msg = String(e?.message || '');
@@ -429,7 +445,7 @@ function renderSearch(container) {
 
 function renderSearchResults(container, results) {
   if (!container) return;
-  if (!results.length && _searchQuery.length >= 2) {
+  if (!results.length && _searchQuery.length >= 1) {
     container.innerHTML = `<div class="fr-empty"><div class="fr-empty-txt">${T('fr_no_users')}</div></div>`;
     return;
   }
@@ -451,7 +467,7 @@ let _searchT = null;
 async function handleFrSearch(val) {
   _searchQuery = val;
   const resultsEl = document.getElementById('frSearchResults');
-  if (val.trim().length < 2) { _searchResults = []; if (resultsEl) resultsEl.innerHTML = ''; return; }
+  if (val.trim().length < 1) { _searchResults = []; if (resultsEl) resultsEl.innerHTML = ''; return; }
   if (_searchT) clearTimeout(_searchT);
   _searchT = setTimeout(async () => {
     _searchResults = await searchUsers(val);

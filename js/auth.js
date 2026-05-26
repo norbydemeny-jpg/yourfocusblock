@@ -347,11 +347,37 @@ function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g
 // ── Profiel laden / cachen ─────────────────────────────
 async function loadMyProfile(userId){
   try {
-    const queryPromise = supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
+    // Attempt to select app_state if the column has been added by the user in Supabase
+    const queryPromise = supabase.from('profiles').select('id, username, avatar_url, app_state').eq('id', userId).single();
     const res = await _withTimeout(queryPromise, 4000, { data: null });
     const data = res?.data;
+    
+    // Apply cloud progression if it exists and is newer than local storage
+    if (data && data.app_state && typeof window.applyLoaded === 'function') {
+      const localData = typeof window.loadLocal === 'function' ? window.loadLocal() : null;
+      const cloudTs = data.app_state._ts || 0;
+      const localTs = localData ? (localData._ts || 0) : -1;
+      
+      if (cloudTs > localTs) {
+        // Merge the cloud stats with local UI settings so we don't overwrite user theme preferences
+        const mergedData = Object.assign({}, localData || {}, data.app_state);
+        window.applyLoaded(mergedData);
+        // Force the UI to reflect new stats
+        if (typeof window.renderDayBar === 'function') window.renderDayBar();
+        if (typeof window.updateStreakUI === 'function') window.updateStreakUI();
+      }
+    }
+    
     _myProfile = data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
-  } catch { _myProfile = { id: userId, username: '', avatar_url: '' }; }
+  } catch (e) {
+    // Fallback if app_state column doesn't exist yet (PostgREST error)
+    try {
+      const fallback = await supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
+      _myProfile = fallback.data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
+    } catch {
+      _myProfile = { id: userId, username: '', avatar_url: '' };
+    }
+  }
   return _myProfile;
 }
 
@@ -466,3 +492,23 @@ window.switchAuthTab   = switchAuthTab;
 window.handleLogin     = handleLogin;
 window.handleRegister  = handleRegister;
 window.handleLogout    = handleLogout;
+
+// ── Progression Sync to Cloud ───────────────────────────
+window.fbSyncProgression = async function(payload) {
+  if (!_currentUser) return;
+  try {
+    // Only upload the relevant progression parts to keep the payload size reasonable
+    const appState = {
+      streak: payload.streak,
+      lastDay: payload.lastDay,
+      lifetimeBlocks: payload.lifetimeBlocks,
+      lifetimeMins: payload.lifetimeMins,
+      lifetimeFocusPoints: payload.lifetimeFocusPoints,
+      history: payload.history,
+      _ts: payload._ts || Date.now()
+    };
+    await supabase.from('profiles').update({ app_state: appState }).eq('id', _currentUser.id);
+  } catch (e) {
+    console.error('[Auth] Error syncing progression:', e.message);
+  }
+};

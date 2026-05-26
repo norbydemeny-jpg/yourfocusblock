@@ -40,7 +40,8 @@ function buildPayload(){
       date:studyDayStr(), blocks, curBlock, curPhase, timeLeft, totalTime,
       endTimestamp: running ? endTimestamp : 0,
       sessComp, completedMins, currentSessionMins, dayCounted, running:false
-    } : null
+    } : null,
+    _ts: Date.now()
   };
 }
 
@@ -80,7 +81,12 @@ function saveData(){
   const d = buildPayload();
   try{ localStorage.setItem(LS_KEY, JSON.stringify(d)); }catch(e){}
   clearTimeout(saveT);
-  saveT = setTimeout(() => idbSet(d), 400);
+  saveT = setTimeout(() => {
+    idbSet(d);
+    if (typeof window.fbSyncProgression === 'function') {
+      window.fbSyncProgression(d);
+    }
+  }, 400);
 }
 
 function loadLocal(){
