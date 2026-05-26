@@ -7,11 +7,11 @@ import { supabase } from './supabaseClient.js';
 let _lbTab = 'today';
 
 // ── Helpers ────────────────────────────────────────────
-async function getCurrentUserId() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch { return null; }
+function getCurrentUserId() {
+  if (typeof window.fbUserId === 'function') {
+    return window.fbUserId();
+  }
+  return null;
 }
 
 function _esc(s) {

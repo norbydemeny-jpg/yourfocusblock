@@ -27,6 +27,12 @@ function fbAvatarHTML(name, url, size){
 window.fbAvatarHTML  = fbAvatarHTML;
 window.fbAvatarColor = fbAvatarColor;
 window.fbMyProfile   = () => _myProfile;
+window.fbUserId      = () => _currentUser?.id ?? null;
+
+let resolveAuthReady;
+window.fbAuthReady = new Promise(resolve => {
+  resolveAuthReady = resolve;
+});
 
 // ── Helpers ────────────────────────────────────────────
 function generateReferralCode(username) {
@@ -388,17 +394,24 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     await ensureProfile(user);
   }
 
-  updateAuthUI(user);
+  await updateAuthUI(user);
 });
 
 // ── Init: herstel bestaande sessie bij pagina laden ─────
 (async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (session?.user) {
-    await ensureProfile(session.user);
-    updateAuthUI(session.user);
-  } else {
-    updateAuthUI(null);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      await ensureProfile(session.user);
+      await updateAuthUI(session.user);
+    } else {
+      await updateAuthUI(null);
+    }
+  } catch (e) {
+    console.error('[Auth] Init error:', e);
+    await updateAuthUI(null);
+  } finally {
+    resolveAuthReady();
   }
 })();
 

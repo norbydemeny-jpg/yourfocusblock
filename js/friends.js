@@ -17,13 +17,11 @@ let _friendsCache  = null; // {friends, requests, ts}
 let _userIdCache   = null;
 
 // ── Auth helper ────────────────────────────────────────
-async function getCurrentUserId() {
-  if (_userIdCache) return _userIdCache;
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    _userIdCache = session?.user?.id ?? null;
-    return _userIdCache;
-  } catch { return null; }
+function getCurrentUserId() {
+  if (typeof window.fbUserId === 'function') {
+    return window.fbUserId();
+  }
+  return null;
 }
 
 // Wis de cache wanneer auth-state verandert (login/logout/refresh).
@@ -541,8 +539,8 @@ supabase.auth.onAuthStateChange(async (event, session) => {
 });
 
 (async () => {
-  const { data: { session } } = await supabase.auth.getSession();
-  await updateFriendsUI(session?.user?.id ?? null);
+  await window.fbAuthReady;
+  await updateFriendsUI(window.fbUserId());
 })();
 
 // ══════════════════════════════════════════════════════

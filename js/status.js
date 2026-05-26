@@ -12,11 +12,11 @@ let _profiles  = {};   // id → username
 let _statusMap = {};   // id → status
 
 // ── Auth helper ────────────────────────────────────────
-async function getCurrentUserId() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch { return null; }
+function getCurrentUserId() {
+  if (typeof window.fbUserId === 'function') {
+    return window.fbUserId();
+  }
+  return null;
 }
 
 // ── Eigen status upserten ──────────────────────────────
@@ -195,7 +195,7 @@ function getStatusCache() { return _statusMap; }
 // ── Vriendenlijsten voor homepage / dashboard ─────────
 function getActiveFriends() { return _buildFriendList().filter(f => f.status === 'studying'); }
 function getFriendList()    { return _buildFriendList(); }
-function fbUserId()         { return _myId; }
+// fbUserId removed to avoid conflict with auth.js
 function refreshSocialViews() {
   if (typeof window.renderOverviewSocial === 'function' &&
       document.getElementById('overview')?.style.display !== 'none') {
@@ -268,7 +268,8 @@ function _updateLbAreas(userId) {
 
 // ── Init ──────────────────────────────────────────────
 (async () => {
-  _myId = await getCurrentUserId();
+  await window.fbAuthReady;
+  _myId = getCurrentUserId();
   if (_myId) {
     await updateMyStatus('offline');
     await loadFriendsAndSubscribe();
@@ -281,5 +282,4 @@ window.updateMyStatus         = updateMyStatus;
 window.getStatusCache         = getStatusCache;
 window.getActiveFriends       = getActiveFriends;
 window.getFriendList          = getFriendList;
-window.fbUserId               = fbUserId;
 window.reloadFriendStatuses   = loadFriendsAndSubscribe;

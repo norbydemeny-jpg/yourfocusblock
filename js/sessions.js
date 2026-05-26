@@ -17,11 +17,11 @@ function saveQueue(q) {
 }
 
 // ── Huidige ingelogde user-ID ophalen ──────────────────
-async function getCurrentUserId() {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id ?? null;
-  } catch { return null; }
+function getCurrentUserId() {
+  if (typeof window.fbUserId === 'function') {
+    return window.fbUserId();
+  }
+  return null;
 }
 
 // ── Eén sessie inserten in Supabase ────────────────────
@@ -89,8 +89,11 @@ async function recordFocusSession({ minutes, subject, completed_at }) {
 // ── Automatisch flushen bij netwerkherstel ─────────────
 window.addEventListener('online', () => flushQueue());
 
-// Probeer bij laden bestaande queue te legen
-flushQueue();
+// Probeer bij laden bestaande queue te legen zodra auth klaar is
+(async () => {
+  await window.fbAuthReady;
+  flushQueue();
+})();
 
 // ── Expose aan window voor timer.js (geen ES module) ───
 window.recordFocusSession = recordFocusSession;
