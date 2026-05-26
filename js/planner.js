@@ -653,8 +653,13 @@ function goPlanner(mode){
 
 function backFromPlanner(){
   if(_planningForDate){ _planningForDate = null; goAgenda(); return; }
-  showScreen('home');
-  renderHome();
+  // Go back to wherever the user came from (overview, agenda, app, home, progress)
+  const prev = (typeof window.fbPrevScreen === 'function') ? window.fbPrevScreen() : 'home';
+  if(prev === 'overview' && typeof renderOverview === 'function'){ renderOverview(); showScreen('overview'); return; }
+  if(prev === 'agenda'   && typeof renderAgenda   === 'function'){ renderAgenda();   showScreen('agenda');   return; }
+  if(prev === 'app'      && blocks.length)                       { renderApp();      showScreen('app');      return; }
+  if(prev === 'progress' && typeof renderProgress === 'function'){ renderProgress(); showScreen('progress'); return; }
+  showScreen('home'); renderHome();
 }
 
 /* ---- Calculate per-block start/end times from D.bb + plannerStartTime ---- */
@@ -986,6 +991,14 @@ function saveBlockDetail(){
   if(noteEl) b.note  = noteEl.value;
   if(howEl)  b.note2 = howEl.value;
   if(subjEl && !b.isPause) b.subject = subjEl.value;
+  // Auto-add a new subject if user typed something new
+  if(b.subject && !b.isPause){
+    const name = b.subject.trim();
+    if(name && !subjects.some(s => s.name.toLowerCase() === name.toLowerCase())){
+      addSubject(name);
+      if(typeof banner === 'function') banner(Tf('subj_added', {name}));
+    }
+  }
   closeBlockDetail();
 }
 

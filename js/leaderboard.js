@@ -98,17 +98,21 @@ async function renderLeaderboard() {
   const body = document.getElementById('leaderboardBody');
   if (!body) return;
 
+  // Localize modal title
+  const titleEl = document.querySelector('#leaderboardOv .modal-title');
+  if (titleEl) titleEl.textContent = '🏆 ' + T('lb_title');
+
   const userId = await getCurrentUserId();
   if (!userId) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Log in om de ranglijst te zien.</p>`;
+    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('lb_login_msg')}</p>`;
     return;
   }
 
-  body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">Laden…</div>`;
+  body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">${T('fr_loading')}</div>`;
 
   const data = await _loadData();
   if (!data) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">Kon ranglijst niet laden.</p>`;
+    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('lb_load_err')}</p>`;
     return;
   }
 
@@ -132,8 +136,8 @@ async function renderLeaderboard() {
 
   body.innerHTML = `
     <div class="lb-tabs">
-      <button class="lb-tab ${_lbTab === 'today' ? 'on' : ''}" onclick="switchLbTab('today')">Vandaag</button>
-      <button class="lb-tab ${_lbTab === 'week'  ? 'on' : ''}" onclick="switchLbTab('week')">Deze week</button>
+      <button class="lb-tab ${_lbTab === 'today' ? 'on' : ''}" onclick="switchLbTab('today')">${T('nav_today')}</button>
+      <button class="lb-tab ${_lbTab === 'week'  ? 'on' : ''}" onclick="switchLbTab('week')">${T('prog_week')}</button>
     </div>
     <div class="lb-list">
       ${entries.map((e, i) => {
@@ -146,7 +150,7 @@ async function renderLeaderboard() {
             <div class="lb-info">
               <div class="lb-name">
                 ${_esc(e.username)}
-                ${e.isMe ? '<span class="lb-you">jij</span>' : ''}
+                ${e.isMe ? `<span class="lb-you">${T('stats_you')}</span>` : ''}
               </div>
               <div class="lb-bar-wrap">
                 <div class="lb-bar-fill" style="width:${e.mins > 0 ? Math.max(pct, 3) : 0}%"></div>
@@ -159,8 +163,8 @@ async function renderLeaderboard() {
     ${allZero ? `
       <div class="lb-empty">
         <div class="lb-empty-icon">📚</div>
-        <div class="lb-empty-txt">Nog geen sessies ${_lbTab === 'today' ? 'vandaag' : 'deze week'}</div>
-        <div class="lb-empty-sub">Wie start als eerste?</div>
+        <div class="lb-empty-txt">${_lbTab === 'today' ? T('lb_no_sessions_today') : T('lb_no_sessions_week')}</div>
+        <div class="lb-empty-sub">${T('lb_who_first')}</div>
       </div>` : ''}`;
 }
 

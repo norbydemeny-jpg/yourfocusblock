@@ -264,6 +264,25 @@ en:{
  agenda_sum_planned:"Planned",agenda_sum_focus:"Focus blocks",agenda_sum_pause:"Break blocks",agenda_sum_exams:"Exams",
  tab_profile:"Profile",set_change_photo:"Change photo",set_remove_photo:"Remove photo",set_username:"Username",set_email:"E-mail",set_weekgoal:"Weekly goal",set_weekgoal_s:"Hours per week",logout:"Log out",
  agenda_resize_hint:"Drag to resize",avatar_col_missing:"Run the SQL migration in Supabase to enable photos (alter table profiles add column avatar_url text).",
+ // Auth modal
+ auth_account_title:"Account",auth_login:"Log in",auth_register:"Sign up",auth_email_ph:"E-mail address",auth_password_ph:"Password",auth_username_ph:"Username",auth_password_new_ph:"Password (min. 6 characters)",auth_login_btn:"Log in",auth_register_btn:"Create account",auth_logout:"Log out",
+ auth_fill_all:"Fill in all fields.",auth_fill_email_pw:"Fill in e-mail and password.",auth_min_username:"Username must be at least 2 characters.",auth_min_password:"Password must be at least 6 characters.",auth_busy:"Loading…",auth_creating:"Creating account…",auth_welcome_back:"Welcome back!",auth_account_created:"Account created! Welcome {name}!",auth_logged_out:"You're logged out.",auth_logout_failed:"Logout failed: {msg}",
+ auth_err_invalid:"E-mail or password is incorrect.",auth_err_already:"This e-mail is already in use.",auth_err_minpw:"Password must be at least 6 characters.",auth_err_connect:"Connection failed. Please try again.",
+ // Friends modal
+ fr_title:"Friends",fr_tab_list:"Friends",fr_tab_requests:"Requests",fr_tab_search:"Search",fr_loading:"Loading…",fr_login_msg:"Log in to use friends.",fr_load_err:"Couldn't load friends. Try again.",fr_retry:"↺ Retry",fr_open_lb:"🏆 View leaderboard",fr_no_friends:"No friends yet.",fr_search_hint:"Search by username.",fr_no_requests:"No pending requests.",fr_wants_friend:"Wants to be friends",fr_remove:"Remove",fr_search_ph:"Search username…",fr_no_users:"No users found.",fr_add:"+ Add",fr_sent:"✓ Sent",fr_request_sent:"Friend request sent to {name}!",fr_accepted:"Friend request accepted!",fr_err:"Error: {msg}",fr_remove_confirm:"Remove {name} as friend?",fr_removed:"{name} removed.",fr_already_friends:"You're already friends",fr_pending:"There's already a pending request",fr_not_logged_in:"Not logged in",
+ fr_started:"{name} started a {mins} min session",
+ // Leaderboard modal
+ lb_title:"Leaderboard",lb_load_err:"Couldn't load leaderboard.",lb_login_msg:"Log in to see the leaderboard.",lb_no_sessions_today:"No sessions today yet",lb_no_sessions_week:"No sessions this week yet",lb_who_first:"Who starts first?",
+ // Subjects auto-add
+ subj_added:"Subject \"{name}\" added ✓",
+ // Agenda day action sheet
+ agenda_plan_this:"Plan this day",agenda_edit_this:"Edit plan",agenda_remove_plan:"Remove plan",agenda_add_exam_here:"Add exam",
+ // Settings extras
+ set_show_friends:"Show friend activity",set_show_friends_s:"See who is studying right now",
+ fs_title:"Stats — {name}",fs_total:"All-time",fs_sessions:"sessions",fs_per_subject:"Per subject",fs_no_data:"No sessions yet",
+ fr_view_all:"View all (+{n})",fr_show_less:"Show less",fr_week_active:"Studied this week",
+ ag_legend_today:"Today",ag_legend_planned:"Planned",ag_legend_exam:"Exam",ag_plan_btn_full:"+ Plan this day",
+ br_edit_lbl:"Break duration",br_note_ph:"Note (optional)",
 },
 };
 TR.nl = {
@@ -425,6 +444,19 @@ TR.nl = {
  agenda_sum_planned:"Gepland",agenda_sum_focus:"Focus blokken",agenda_sum_pause:"Pauzeblokken",agenda_sum_exams:"Examens",
  tab_profile:"Profiel",set_change_photo:"Foto wijzigen",set_remove_photo:"Foto verwijderen",set_username:"Gebruikersnaam",set_email:"E-mail",set_weekgoal:"Weekdoel",set_weekgoal_s:"Uren per week",logout:"Uitloggen",
  agenda_resize_hint:"Sleep om te verlengen",avatar_col_missing:"Voer de SQL-migratie in Supabase uit om foto's mogelijk te maken (alter table profiles add column avatar_url text).",
+ auth_account_title:"Account",auth_login:"Inloggen",auth_register:"Registreren",auth_email_ph:"E-mailadres",auth_password_ph:"Wachtwoord",auth_username_ph:"Gebruikersnaam",auth_password_new_ph:"Wachtwoord (min. 6 tekens)",auth_login_btn:"Inloggen",auth_register_btn:"Account aanmaken",auth_logout:"Uitloggen",
+ auth_fill_all:"Vul alle velden in.",auth_fill_email_pw:"Vul e-mail en wachtwoord in.",auth_min_username:"Gebruikersnaam moet minstens 2 tekens zijn.",auth_min_password:"Wachtwoord moet minstens 6 tekens zijn.",auth_busy:"Bezig…",auth_creating:"Account aanmaken…",auth_welcome_back:"Welkom terug!",auth_account_created:"Account aangemaakt! Welkom {name}!",auth_logged_out:"Je bent uitgelogd.",auth_logout_failed:"Uitloggen mislukt: {msg}",
+ auth_err_invalid:"E-mail of wachtwoord klopt niet.",auth_err_already:"Dit e-mailadres is al in gebruik.",auth_err_minpw:"Wachtwoord moet minstens 6 tekens zijn.",auth_err_connect:"Verbinding mislukt. Probeer opnieuw.",
+ fr_title:"Vrienden",fr_tab_list:"Vrienden",fr_tab_requests:"Verzoeken",fr_tab_search:"Zoeken",fr_loading:"Laden…",fr_login_msg:"Log in om vrienden te gebruiken.",fr_load_err:"Kon vrienden niet laden. Probeer opnieuw.",fr_retry:"↺ Opnieuw",fr_open_lb:"🏆 Ranglijst bekijken",fr_no_friends:"Nog geen vrienden.",fr_search_hint:"Zoek iemand op gebruikersnaam.",fr_no_requests:"Geen openstaande verzoeken.",fr_wants_friend:"Wil bevriend zijn",fr_remove:"Verwijderen",fr_search_ph:"Gebruikersnaam zoeken…",fr_no_users:"Geen gebruikers gevonden.",fr_add:"+ Toevoegen",fr_sent:"✓ Verzonden",fr_request_sent:"Vriendschapsverzoek verzonden aan {name}!",fr_accepted:"Vriendschapsverzoek geaccepteerd!",fr_err:"Fout: {msg}",fr_remove_confirm:"{name} verwijderen als vriend?",fr_removed:"{name} verwijderd.",fr_already_friends:"Jullie zijn al vrienden",fr_pending:"Er is al een openstaand verzoek",fr_not_logged_in:"Niet ingelogd",
+ fr_started:"{name} is begonnen aan een sessie van {mins} min",
+ lb_title:"Ranglijst",lb_load_err:"Kon ranglijst niet laden.",lb_login_msg:"Log in om de ranglijst te zien.",lb_no_sessions_today:"Nog geen sessies vandaag",lb_no_sessions_week:"Nog geen sessies deze week",lb_who_first:"Wie start als eerste?",
+ subj_added:"Vak \"{name}\" toegevoegd ✓",
+ agenda_plan_this:"Deze dag plannen",agenda_edit_this:"Plan bewerken",agenda_remove_plan:"Plan verwijderen",agenda_add_exam_here:"Examen toevoegen",
+ set_show_friends:"Activiteit van vrienden tonen",set_show_friends_s:"Zie wie er nu aan het studeren is",
+ fs_title:"Stats — {name}",fs_total:"Totaal",fs_sessions:"sessies",fs_per_subject:"Per vak",fs_no_data:"Nog geen sessies",
+ fr_view_all:"Alles bekijken (+{n})",fr_show_less:"Toon minder",fr_week_active:"Geleerd deze week",
+ ag_legend_today:"Vandaag",ag_legend_planned:"Gepland",ag_legend_exam:"Examen",ag_plan_btn_full:"+ Plan deze dag",
+ br_edit_lbl:"Pauzeduur",br_note_ph:"Notitie (optioneel)",
 };
 TR.fr = {
  back:"Retour",next:"Suivant",continue:"Continuer",done:"Terminé",cancel:"Annuler",save:"Enregistrer",add:"Ajouter",skip:"Passer",
@@ -585,6 +617,19 @@ TR.fr = {
  agenda_sum_planned:"Planifié",agenda_sum_focus:"Blocs focus",agenda_sum_pause:"Blocs pause",agenda_sum_exams:"Examens",
  tab_profile:"Profil",set_change_photo:"Changer la photo",set_remove_photo:"Supprimer la photo",set_username:"Nom d'utilisateur",set_email:"E-mail",set_weekgoal:"Objectif semaine",set_weekgoal_s:"Heures par semaine",logout:"Se déconnecter",
  agenda_resize_hint:"Glisse pour redimensionner",avatar_col_missing:"Exécute la migration SQL dans Supabase pour activer les photos (alter table profiles add column avatar_url text).",
+ auth_account_title:"Compte",auth_login:"Connexion",auth_register:"Inscription",auth_email_ph:"Adresse e-mail",auth_password_ph:"Mot de passe",auth_username_ph:"Nom d'utilisateur",auth_password_new_ph:"Mot de passe (min. 6 caractères)",auth_login_btn:"Se connecter",auth_register_btn:"Créer un compte",auth_logout:"Se déconnecter",
+ auth_fill_all:"Remplis tous les champs.",auth_fill_email_pw:"Remplis l'e-mail et le mot de passe.",auth_min_username:"Le nom d'utilisateur doit faire au moins 2 caractères.",auth_min_password:"Le mot de passe doit faire au moins 6 caractères.",auth_busy:"Chargement…",auth_creating:"Création du compte…",auth_welcome_back:"Bienvenue !",auth_account_created:"Compte créé ! Bienvenue {name} !",auth_logged_out:"Tu es déconnecté.",auth_logout_failed:"Déconnexion échouée : {msg}",
+ auth_err_invalid:"E-mail ou mot de passe incorrect.",auth_err_already:"Cet e-mail est déjà utilisé.",auth_err_minpw:"Le mot de passe doit faire au moins 6 caractères.",auth_err_connect:"Connexion échouée. Réessaie.",
+ fr_title:"Amis",fr_tab_list:"Amis",fr_tab_requests:"Demandes",fr_tab_search:"Rechercher",fr_loading:"Chargement…",fr_login_msg:"Connecte-toi pour utiliser les amis.",fr_load_err:"Impossible de charger les amis. Réessaie.",fr_retry:"↺ Réessayer",fr_open_lb:"🏆 Voir le classement",fr_no_friends:"Pas encore d'amis.",fr_search_hint:"Cherche par nom d'utilisateur.",fr_no_requests:"Aucune demande en attente.",fr_wants_friend:"Veut devenir ami",fr_remove:"Retirer",fr_search_ph:"Rechercher un nom…",fr_no_users:"Aucun utilisateur trouvé.",fr_add:"+ Ajouter",fr_sent:"✓ Envoyé",fr_request_sent:"Demande envoyée à {name} !",fr_accepted:"Demande acceptée !",fr_err:"Erreur : {msg}",fr_remove_confirm:"Retirer {name} de tes amis ?",fr_removed:"{name} retiré.",fr_already_friends:"Vous êtes déjà amis",fr_pending:"Une demande est déjà en cours",fr_not_logged_in:"Non connecté",
+ fr_started:"{name} a commencé une session de {mins} min",
+ lb_title:"Classement",lb_load_err:"Impossible de charger le classement.",lb_login_msg:"Connecte-toi pour voir le classement.",lb_no_sessions_today:"Aucune session aujourd'hui",lb_no_sessions_week:"Aucune session cette semaine",lb_who_first:"Qui commence le premier ?",
+ subj_added:"Matière « {name} » ajoutée ✓",
+ agenda_plan_this:"Planifier ce jour",agenda_edit_this:"Modifier le plan",agenda_remove_plan:"Supprimer le plan",agenda_add_exam_here:"Ajouter un examen",
+ set_show_friends:"Afficher l'activité des amis",set_show_friends_s:"Voir qui étudie en ce moment",
+ fs_title:"Stats — {name}",fs_total:"Total",fs_sessions:"sessions",fs_per_subject:"Par matière",fs_no_data:"Aucune session",
+ fr_view_all:"Voir tout (+{n})",fr_show_less:"Voir moins",fr_week_active:"Étudié cette semaine",
+ ag_legend_today:"Aujourd'hui",ag_legend_planned:"Planifié",ag_legend_exam:"Examen",ag_plan_btn_full:"+ Planifier ce jour",
+ br_edit_lbl:"Durée de pause",br_note_ph:"Note (facultative)",
 };
 TR.es = {
  back:"Atrás",next:"Siguiente",continue:"Continuar",done:"Listo",cancel:"Cancelar",save:"Guardar",add:"Añadir",skip:"Saltar",
@@ -745,6 +790,19 @@ TR.es = {
  agenda_sum_planned:"Planificado",agenda_sum_focus:"Bloques foco",agenda_sum_pause:"Bloques pausa",agenda_sum_exams:"Exámenes",
  tab_profile:"Perfil",set_change_photo:"Cambiar foto",set_remove_photo:"Quitar foto",set_username:"Nombre de usuario",set_email:"E-mail",set_weekgoal:"Meta semanal",set_weekgoal_s:"Horas por semana",logout:"Cerrar sesión",
  agenda_resize_hint:"Arrastra para redimensionar",avatar_col_missing:"Ejecuta la migración SQL en Supabase para habilitar fotos (alter table profiles add column avatar_url text).",
+ auth_account_title:"Cuenta",auth_login:"Iniciar sesión",auth_register:"Registrarse",auth_email_ph:"Correo electrónico",auth_password_ph:"Contraseña",auth_username_ph:"Nombre de usuario",auth_password_new_ph:"Contraseña (mín. 6 caracteres)",auth_login_btn:"Entrar",auth_register_btn:"Crear cuenta",auth_logout:"Cerrar sesión",
+ auth_fill_all:"Rellena todos los campos.",auth_fill_email_pw:"Rellena el correo y la contraseña.",auth_min_username:"El nombre debe tener al menos 2 caracteres.",auth_min_password:"La contraseña debe tener al menos 6 caracteres.",auth_busy:"Cargando…",auth_creating:"Creando cuenta…",auth_welcome_back:"¡Bienvenido de nuevo!",auth_account_created:"¡Cuenta creada! ¡Bienvenido {name}!",auth_logged_out:"Sesión cerrada.",auth_logout_failed:"Error al cerrar sesión: {msg}",
+ auth_err_invalid:"Correo o contraseña incorrectos.",auth_err_already:"Este correo ya está en uso.",auth_err_minpw:"La contraseña debe tener al menos 6 caracteres.",auth_err_connect:"Conexión fallida. Inténtalo de nuevo.",
+ fr_title:"Amigos",fr_tab_list:"Amigos",fr_tab_requests:"Solicitudes",fr_tab_search:"Buscar",fr_loading:"Cargando…",fr_login_msg:"Inicia sesión para usar amigos.",fr_load_err:"No se pudieron cargar los amigos. Inténtalo.",fr_retry:"↺ Reintentar",fr_open_lb:"🏆 Ver clasificación",fr_no_friends:"Aún no tienes amigos.",fr_search_hint:"Busca por nombre de usuario.",fr_no_requests:"No hay solicitudes pendientes.",fr_wants_friend:"Quiere ser amigo",fr_remove:"Quitar",fr_search_ph:"Buscar nombre…",fr_no_users:"No se encontraron usuarios.",fr_add:"+ Añadir",fr_sent:"✓ Enviado",fr_request_sent:"¡Solicitud enviada a {name}!",fr_accepted:"¡Solicitud aceptada!",fr_err:"Error: {msg}",fr_remove_confirm:"¿Quitar a {name} de tus amigos?",fr_removed:"{name} eliminado.",fr_already_friends:"Ya sois amigos",fr_pending:"Ya hay una solicitud pendiente",fr_not_logged_in:"No has iniciado sesión",
+ fr_started:"{name} ha comenzado una sesión de {mins} min",
+ lb_title:"Clasificación",lb_load_err:"No se pudo cargar la clasificación.",lb_login_msg:"Inicia sesión para ver la clasificación.",lb_no_sessions_today:"Aún sin sesiones hoy",lb_no_sessions_week:"Aún sin sesiones esta semana",lb_who_first:"¿Quién empieza primero?",
+ subj_added:"Materia «{name}» añadida ✓",
+ agenda_plan_this:"Planificar este día",agenda_edit_this:"Editar plan",agenda_remove_plan:"Quitar plan",agenda_add_exam_here:"Añadir examen",
+ set_show_friends:"Mostrar actividad de amigos",set_show_friends_s:"Ve quién está estudiando ahora",
+ fs_title:"Stats — {name}",fs_total:"Total",fs_sessions:"sesiones",fs_per_subject:"Por materia",fs_no_data:"Aún sin sesiones",
+ fr_view_all:"Ver todo (+{n})",fr_show_less:"Ver menos",fr_week_active:"Estudiado esta semana",
+ ag_legend_today:"Hoy",ag_legend_planned:"Planificado",ag_legend_exam:"Examen",ag_plan_btn_full:"+ Planificar este día",
+ br_edit_lbl:"Duración de pausa",br_note_ph:"Nota (opcional)",
 };
 TR.ro = {
  back:"Înapoi",next:"Următorul",continue:"Continuă",done:"Gata",cancel:"Anulează",save:"Salvează",add:"Adaugă",skip:"Sari",
@@ -905,6 +963,19 @@ TR.ro = {
  agenda_sum_planned:"Planificat",agenda_sum_focus:"Blocuri focus",agenda_sum_pause:"Blocuri pauză",agenda_sum_exams:"Examene",
  tab_profile:"Profil",set_change_photo:"Schimbă fotografia",set_remove_photo:"Șterge fotografia",set_username:"Nume utilizator",set_email:"E-mail",set_weekgoal:"Obiectiv săptămânal",set_weekgoal_s:"Ore pe săptămână",logout:"Deconectare",
  agenda_resize_hint:"Trage pentru a redimensiona",avatar_col_missing:"Rulează migrația SQL în Supabase pentru a activa fotografiile (alter table profiles add column avatar_url text).",
+ auth_account_title:"Cont",auth_login:"Conectare",auth_register:"Înregistrare",auth_email_ph:"Adresă e-mail",auth_password_ph:"Parolă",auth_username_ph:"Nume utilizator",auth_password_new_ph:"Parolă (min. 6 caractere)",auth_login_btn:"Conectare",auth_register_btn:"Creează cont",auth_logout:"Deconectare",
+ auth_fill_all:"Completează toate câmpurile.",auth_fill_email_pw:"Completează e-mailul și parola.",auth_min_username:"Numele trebuie să aibă cel puțin 2 caractere.",auth_min_password:"Parola trebuie să aibă cel puțin 6 caractere.",auth_busy:"Se încarcă…",auth_creating:"Se creează contul…",auth_welcome_back:"Bun venit!",auth_account_created:"Cont creat! Bun venit {name}!",auth_logged_out:"Ai fost deconectat.",auth_logout_failed:"Deconectare eșuată: {msg}",
+ auth_err_invalid:"E-mail sau parolă incorectă.",auth_err_already:"Acest e-mail este deja folosit.",auth_err_minpw:"Parola trebuie să aibă cel puțin 6 caractere.",auth_err_connect:"Conexiune eșuată. Încearcă din nou.",
+ fr_title:"Prieteni",fr_tab_list:"Prieteni",fr_tab_requests:"Cereri",fr_tab_search:"Caută",fr_loading:"Se încarcă…",fr_login_msg:"Conectează-te ca să folosești prietenii.",fr_load_err:"Nu am putut încărca prietenii. Încearcă.",fr_retry:"↺ Reîncearcă",fr_open_lb:"🏆 Vezi clasamentul",fr_no_friends:"Încă fără prieteni.",fr_search_hint:"Caută după nume utilizator.",fr_no_requests:"Nicio cerere în așteptare.",fr_wants_friend:"Vrea să fie prieten",fr_remove:"Elimină",fr_search_ph:"Caută utilizator…",fr_no_users:"Niciun utilizator găsit.",fr_add:"+ Adaugă",fr_sent:"✓ Trimis",fr_request_sent:"Cerere trimisă lui {name}!",fr_accepted:"Cerere acceptată!",fr_err:"Eroare: {msg}",fr_remove_confirm:"Elimini pe {name} dintre prieteni?",fr_removed:"{name} eliminat.",fr_already_friends:"Sunteți deja prieteni",fr_pending:"Există deja o cerere în așteptare",fr_not_logged_in:"Neconectat",
+ fr_started:"{name} a început o sesiune de {mins} min",
+ lb_title:"Clasament",lb_load_err:"Nu am putut încărca clasamentul.",lb_login_msg:"Conectează-te ca să vezi clasamentul.",lb_no_sessions_today:"Încă nicio sesiune azi",lb_no_sessions_week:"Încă nicio sesiune săptămâna asta",lb_who_first:"Cine începe primul?",
+ subj_added:"Materia „{name}” adăugată ✓",
+ agenda_plan_this:"Planifică această zi",agenda_edit_this:"Editează planul",agenda_remove_plan:"Șterge planul",agenda_add_exam_here:"Adaugă examen",
+ set_show_friends:"Arată activitatea prietenilor",set_show_friends_s:"Vezi cine învață acum",
+ fs_title:"Stats — {name}",fs_total:"Total",fs_sessions:"sesiuni",fs_per_subject:"Pe materie",fs_no_data:"Încă nicio sesiune",
+ fr_view_all:"Vezi toate (+{n})",fr_show_less:"Vezi mai puține",fr_week_active:"Învățat săptămâna asta",
+ ag_legend_today:"Azi",ag_legend_planned:"Planificat",ag_legend_exam:"Examen",ag_plan_btn_full:"+ Planifică ziua asta",
+ br_edit_lbl:"Durată pauză",br_note_ph:"Notă (opțional)",
 };
 
 /* ---- translate helpers ---- */

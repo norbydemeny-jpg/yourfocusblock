@@ -142,49 +142,41 @@ function renderAuthModal() {
   const body = document.getElementById('authModalBody');
   if (!body) return;
 
+  // localize the modal title
+  const titleEl = document.querySelector('#authOv .modal-title');
+  if (titleEl) titleEl.textContent = (typeof T === 'function') ? T('auth_account_title') : 'Account';
+
   if (_currentUser) {
-    // Ingelogd: toon gebruikersinfo + uitlogknop
-    const initial = (_currentUser.email || '?')[0].toUpperCase();
+    // Logged in: account chip opens settings('profile') instead — but keep this for direct access
     body.innerHTML = `
       <div class="auth-user-info">
-        <div class="auth-avatar">${initial}</div>
-        <div class="auth-username" id="authDisplayName">…</div>
-        <div class="auth-email-lbl">${_currentUser.email}</div>
-        <button class="btn-primary" style="width:100%;margin-top:0.4rem" onclick="handleLogout()">Uitloggen</button>
+        ${fbAvatarHTML(_myProfile?.username || _currentUser.email, _myProfile?.avatar_url, 64)}
+        <div class="auth-username">${_esc(_myProfile?.username || _currentUser.email)}</div>
+        <div class="auth-email-lbl">${_esc(_currentUser.email)}</div>
+        <button class="btn-primary" style="width:100%;margin-top:0.4rem" onclick="handleLogout()">${_esc(T('auth_logout'))}</button>
       </div>`;
-    // Haal username op uit profiel
-    supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', _currentUser.id)
-      .single()
-      .then(({ data }) => {
-        const el = document.getElementById('authDisplayName');
-        if (el && data) el.textContent = data.username;
-      });
     return;
   }
 
-  // Niet ingelogd: login / register tabs
   body.innerHTML = `
     <div class="auth-tabs">
-      <button class="auth-tab on" id="authTabLogin"    onclick="switchAuthTab('login')">Inloggen</button>
-      <button class="auth-tab"    id="authTabRegister" onclick="switchAuthTab('register')">Registreren</button>
+      <button class="auth-tab on" id="authTabLogin"    onclick="switchAuthTab('login')">${_esc(T('auth_login'))}</button>
+      <button class="auth-tab"    id="authTabRegister" onclick="switchAuthTab('register')">${_esc(T('auth_register'))}</button>
     </div>
 
     <div id="authLoginForm" class="auth-form">
-      <input type="email"    id="authEmail"    class="txt-input" placeholder="E-mailadres"  autocomplete="email" />
-      <input type="password" id="authPassword" class="txt-input" placeholder="Wachtwoord"   autocomplete="current-password" />
+      <input type="email"    id="authEmail"    class="txt-input" placeholder="${_esc(T('auth_email_ph'))}"  autocomplete="email" />
+      <input type="password" id="authPassword" class="txt-input" placeholder="${_esc(T('auth_password_ph'))}"   autocomplete="current-password" />
       <div id="authLoginMsg" class="auth-msg"></div>
-      <button class="btn-primary" style="width:100%" onclick="handleLogin()">Inloggen</button>
+      <button class="btn-primary" style="width:100%" onclick="handleLogin()">${_esc(T('auth_login_btn'))}</button>
     </div>
 
     <div id="authRegisterForm" class="auth-form" style="display:none">
-      <input type="text"     id="authUsername"    class="txt-input" placeholder="Gebruikersnaam"  autocomplete="username" maxlength="30" />
-      <input type="email"    id="authEmailReg"    class="txt-input" placeholder="E-mailadres"     autocomplete="email" />
-      <input type="password" id="authPasswordReg" class="txt-input" placeholder="Wachtwoord (min. 6 tekens)" autocomplete="new-password" />
+      <input type="text"     id="authUsername"    class="txt-input" placeholder="${_esc(T('auth_username_ph'))}"  autocomplete="username" maxlength="30" />
+      <input type="email"    id="authEmailReg"    class="txt-input" placeholder="${_esc(T('auth_email_ph'))}"     autocomplete="email" />
+      <input type="password" id="authPasswordReg" class="txt-input" placeholder="${_esc(T('auth_password_new_ph'))}" autocomplete="new-password" />
       <div id="authRegMsg" class="auth-msg"></div>
-      <button class="btn-primary" style="width:100%" onclick="handleRegister()">Account aanmaken</button>
+      <button class="btn-primary" style="width:100%" onclick="handleRegister()">${_esc(T('auth_register_btn'))}</button>
     </div>`;
 }
 
@@ -194,13 +186,13 @@ async function handleLogin() {
   const password =  document.getElementById('authPassword')?.value || '';
 
   if (!email || !password) {
-    showAuthMsg('authLoginMsg', 'Vul e-mail en wachtwoord in.'); return;
+    showAuthMsg('authLoginMsg', T('auth_fill_email_pw')); return;
   }
   try {
-    showAuthMsg('authLoginMsg', 'Bezig…', false);
+    showAuthMsg('authLoginMsg', T('auth_busy'), false);
     await login(email, password);
     closeAuthModal();
-    toast('Welkom terug!');
+    toast(T('auth_welcome_back'));
   } catch (e) {
     showAuthMsg('authLoginMsg', _friendlyError(e.message));
   }
@@ -211,27 +203,31 @@ async function handleRegister() {
   const email    = (document.getElementById('authEmailReg')?.value    || '').trim();
   const password =  document.getElementById('authPasswordReg')?.value || '';
 
-  if (!username || !email || !password) {
-    showAuthMsg('authRegMsg', 'Vul alle velden in.'); return;
-  }
-  if (username.length < 2) {
-    showAuthMsg('authRegMsg', 'Gebruikersnaam moet minstens 2 tekens zijn.'); return;
-  }
-  if (password.length < 6) {
-    showAuthMsg('authRegMsg', 'Wachtwoord moet minstens 6 tekens zijn.'); return;
-  }
+  if (!username || !email || !password) { showAuthMsg('authRegMsg', T('auth_fill_all')); return; }
+  if (username.length < 2)               { showAuthMsg('authRegMsg', T('auth_min_username')); return; }
+  if (password.length < 6)               { showAuthMsg('authRegMsg', T('auth_min_password')); return; }
+
   try {
-    showAuthMsg('authRegMsg', 'Account aanmaken…', false);
+    showAuthMsg('authRegMsg', T('auth_creating'), false);
     const data = await register(email, password, username);
 
+    // If a session was returned (email confirmation disabled in Supabase), we're done.
     if (data.session) {
-      // Sessie direct actief (email bevestiging uit)
       closeAuthModal();
-      toast('Account aangemaakt! Welkom ' + username + '!');
-    } else {
-      // Email bevestiging vereist
-      showAuthMsg('authRegMsg',
-        'Controleer je e-mail om je account te bevestigen, dan kun je inloggen.', false);
+      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Account! ' + username));
+      return;
+    }
+
+    // Otherwise try direct sign-in (works when the email confirmation isn't required
+    // even though Supabase didn't return a session in the signUp response).
+    try {
+      await login(email, password);
+      closeAuthModal();
+      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Account! ' + username));
+    } catch {
+      // Email confirmation is required by the project; user must verify their inbox.
+      // (Disable it under: Supabase → Authentication → Providers → Email → Confirm email.)
+      showAuthMsg('authRegMsg', T('auth_check_email') || 'Check your e-mail to confirm your account.', false);
     }
   } catch (e) {
     showAuthMsg('authRegMsg', _friendlyError(e.message));
@@ -242,18 +238,18 @@ async function handleLogout() {
   try {
     await logout();
     closeAuthModal();
-    toast('Je bent uitgelogd.');
+    toast(T('auth_logged_out'));
   } catch (e) {
-    toast('Uitloggen mislukt: ' + e.message);
+    toast((typeof Tf === 'function') ? Tf('auth_logout_failed', {msg: e.message}) : ('Logout failed: ' + e.message));
   }
 }
 
 function _friendlyError(msg) {
-  if (msg.includes('Invalid login credentials'))   return 'E-mail of wachtwoord klopt niet.';
-  if (msg.includes('Email not confirmed'))          return 'Bevestig eerst je e-mail.';
-  if (msg.includes('User already registered'))      return 'Dit e-mailadres is al in gebruik.';
-  if (msg.includes('Password should be at least'))  return 'Wachtwoord moet minstens 6 tekens zijn.';
-  if (msg.includes('Unable to validate'))           return 'Verbinding met server mislukt. Probeer opnieuw.';
+  if (msg.includes('Invalid login credentials'))   return T('auth_err_invalid');
+  if (msg.includes('Email not confirmed'))          return T('auth_err_invalid');
+  if (msg.includes('User already registered'))      return T('auth_err_already');
+  if (msg.includes('Password should be at least'))  return T('auth_err_minpw');
+  if (msg.includes('Unable to validate'))           return T('auth_err_connect');
   return msg;
 }
 
@@ -301,15 +297,23 @@ async function updateAuthUI(user) {
 
 // ── Profiel bijwerken (gebruikersnaam / avatar) ────────
 async function updateMyProfile(fields){
-  if (!_currentUser) throw new Error('Niet ingelogd');
+  if (!_currentUser) throw new Error((typeof T==='function'?T('fr_not_logged_in'):'Not logged in'));
   const { error } = await supabase.from('profiles').update(fields).eq('id', _currentUser.id);
-  if (error) throw error;
+  if (error) {
+    // The avatar_url column doesn't exist yet → guide the user to run the SQL migration.
+    if (error.message && /avatar_url|column .* does not exist|schema cache/i.test(error.message) && 'avatar_url' in fields){
+      if (typeof window.banner === 'function') window.banner(T('avatar_col_missing'));
+    }
+    throw error;
+  }
   _myProfile = { ..._myProfile, ...fields };
   renderAuthChip();
-  // ververs sociale weergaves die avatars/namen tonen
+  // refresh all the social views that show avatars / usernames
   window.reloadFriendStatuses?.();
   if (typeof window.renderHomeSocial === 'function') window.renderHomeSocial();
   if (typeof window.renderOverviewSocial === 'function') window.renderOverviewSocial();
+  // Refresh open settings pane so the photo shows immediately
+  if (document.getElementById('settingsOv')?.classList.contains('open') && typeof window.renderSettings === 'function') window.renderSettings();
   return _myProfile;
 }
 window.updateMyProfile = updateMyProfile;

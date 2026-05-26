@@ -140,15 +140,21 @@ async function _fillStatsFriends(){
     }
   } catch(e){ if(lbHost) lbHost.innerHTML = `<div class="stats-empty">—</div>`; }
 
-  // Active friends
+  // Active friends — show only those who are actively studying / on break / online
   if(activeHost){
-    const friends = (typeof window.getFriendList === 'function') ? (window.getFriendList() || []) : [];
-    if(!friends.length){
+    const all = (typeof window.getFriendList === 'function') ? (window.getFriendList() || []) : [];
+    const active = all.filter(f => f.status && f.status !== 'offline');
+    if(!all.length){
       activeHost.innerHTML = `<div class="stats-empty">${esc(T('home_social_add_d'))}</div>`;
+    } else if(!active.length){
+      activeHost.innerHTML = `<div class="stats-empty">${esc(T('home_social_none'))}</div>`;
     } else {
-      const order = { studying:0, break:1, online:2, offline:3 };
-      const sorted = [...friends].sort((a,b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
-      activeHost.innerHTML = sorted.map(f => { const m = _stStatusMeta(f.status); return `<div class="stats-active-row">${av(f.username, f.avatar_url, 34)}<span class="sar-name">${esc(f.username)}</span><span class="sar-status ${m.cls}"><span class="sar-dot"></span>${esc(m.label)}</span></div>`; }).join('');
+      const order = { studying:0, break:1, online:2 };
+      const sorted = [...active].sort((a,b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
+      activeHost.innerHTML = sorted.slice(0,6).map(f => { const m = _stStatusMeta(f.status); return `<button class="stats-active-row" data-fid="${esc(f.id)}" data-fname="${esc(f.username)}" data-favatar="${esc(f.avatar_url||'')}">${av(f.username, f.avatar_url, 34)}<span class="sar-name">${esc(f.username)}</span><span class="sar-status ${m.cls}"><span class="sar-dot"></span>${esc(m.label)}</span></button>`).join('');
+      activeHost.querySelectorAll('.stats-active-row').forEach(btn => {
+        btn.onclick = () => openFriendStats(btn.dataset.fid, btn.dataset.fname, btn.dataset.favatar);
+      });
     }
   }
 }

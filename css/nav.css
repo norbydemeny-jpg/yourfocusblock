@@ -632,3 +632,46 @@ body.nav-on .screen { top: var(--nav-h); }
   .mob-bar { display: none !important; }
   .ov-head-title { font-size: 30px; }
 }
+
+/* ══════════════════════════════════════════════════════
+   AGENDA — planned-day marks, legend, plan-day button, future hover
+   ══════════════════════════════════════════════════════ */
+.agm-day.is-past { opacity:0.55; }
+.agm-day.is-future { cursor:pointer; }
+.agm-day.is-future:hover { background:color-mix(in srgb, var(--accent) 14%, var(--bg3)); color:var(--text); transform:scale(1.08); }
+.agm-day.has-plan { font-weight:700; box-shadow:inset 0 -2px 0 var(--accent); }
+.agm-day.has-exam { box-shadow:inset 0 -2px 0 #f87171; }
+.agm-day.has-plan.has-exam { box-shadow:inset 0 -2px 0 var(--accent), inset 2px 0 0 #f87171; }
+.agm-marks { position:absolute; bottom:2px; left:50%; transform:translateX(-50%); display:flex; gap:2px; }
+.agm-marks .agm-dot { position:static; transform:none; width:4px; height:4px; }
+.agm-dot.plan { background:var(--accent); }
+
+.ag-mini-legend { display:flex; gap:10px; margin-top:10px; padding-top:10px; border-top:1px solid var(--border2); flex-wrap:wrap; }
+.agl { display:flex; align-items:center; gap:5px; font-size:10.5px; color:var(--muted); font-weight:500; }
+.agl-dot { width:7px; height:7px; border-radius:50%; }
+.agl-dot.today { background:var(--accent); box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.agl-dot.plan  { background:var(--accent); }
+.agl-dot.exam  { background:#f87171; }
+
+.ag-plan-day-btn {
+  background:transparent; color:var(--text); border:1px solid var(--accent);
+  border-radius:99px; padding:11px 16px; font-size:13.5px; font-weight:700;
+  transition:background .18s, transform .1s; cursor:pointer;
+}
+.ag-plan-day-btn:hover { background:color-mix(in srgb, var(--accent) 15%, transparent); }
+.ag-plan-day-btn:active { transform:scale(0.98); }
+
+.ag-day-col { cursor:pointer; }
+.ag-day-col:hover:not(.is-today) { background:color-mix(in srgb, var(--accent) 4%, transparent); }
+.agmo-day { cursor:pointer; transition:border-color .15s, background .15s, transform .12s; }
+.agmo-day:hover:not(.agmo-blank) { transform:translateY(-1px); border-color:var(--accent); background:color-mix(in srgb, var(--accent) 5%, var(--bg3)); }
+
+/* Exam date quick-pick chips */
+.exam-date-presets { display:flex; gap:6px; margin-bottom:8px; flex-wrap:wrap; }
+.exam-date-chip {
+  background:var(--bg3); border:1px solid var(--border);
+  color:var(--mid); border-radius:99px; padding:5px 12px;
+  font-size:11.5px; font-weight:600; cursor:pointer; transition:all .15s;
+}
+.exam-date-chip:hover { border-color:var(--accent); color:var(--accent); }
+.exam-date-chip.active { background:var(--accent); border-color:var(--accent); color:var(--at); }

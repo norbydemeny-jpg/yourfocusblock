@@ -18,13 +18,12 @@ function openSettings(tab){
   document.getElementById('settingsOv').classList.add('open');
 }
 
-function markDirty(){ _dirty = true; updateSaveBtn(); }
+/* Auto-save: every change persists immediately, no Save/Cancel needed */
+function markDirty(){ _dirty = true; saveData(); updateSaveBtn(); }
 
 function updateSaveBtn(){
-  const sv = document.getElementById('setSaveBtn');
-  const cn = document.getElementById('setCancelBtn');
-  if(sv){ sv.textContent = T('save'); sv.disabled = !_dirty; }
-  if(cn){ cn.textContent = T('cancel'); }
+  const foot = document.getElementById('setFoot');
+  if(foot) foot.style.display = 'none'; // auto-save → footer hidden
 }
 
 function saveSettings(){
@@ -308,15 +307,23 @@ function wireSettings(){
   const rs = body.querySelector('#dataReset'); if(rs) rs.onclick = askReset;
 }
 
-/* ---- apply settings draft live ---- */
+/* ---- apply settings draft live (also auto-saves) ---- */
 function applyLive(){
   Object.assign(S, _t);
   applyBodyClass(); applyAnimLevel();
-  markDirty();
+  markDirty(); // persists via saveData()
   if(blocks.length){
     if(!running){ totalTime = phaseDur(curPhase); timeLeft = totalTime; }
     renderApp();
   }
+  // re-render whichever main screen is visible so changes propagate everywhere
+  ['overview','agenda','progress','home'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && !el.classList.contains('out')){
+      const fn = window['render' + id.charAt(0).toUpperCase() + id.slice(1)];
+      if(typeof fn === 'function') fn();
+    }
+  });
 }
 
 /* ---- downscale uploaded photo to keep storage small ---- */

@@ -99,54 +99,90 @@ function _av(f, size){ return (typeof window.fbAvatarHTML === 'function') ? wind
 
 // ── Actieve-vrienden widget — homepage + app ───────────
 function renderWidget(friends) {
-  const active = friends.filter(f => f.status === 'studying');
+  // Studying / break = "active right now"; online = "available"
+  const studying = friends.filter(f => f.status === 'studying');
+  const onBreak  = friends.filter(f => f.status === 'break');
+  const online   = friends.filter(f => f.status === 'online');
+  const active   = [...studying, ...onBreak, ...online];
+
+  const avBtn = (f, size) => {
+    const sz = size || 30;
+    const cls = `afw-pill afw-${f.status || 'offline'}`;
+    return `<button class="${cls}" data-fid="${f.id}" data-fname="${_esc(f.username)}" data-favatar="${_esc(f.avatar_url||'')}" title="${_esc(f.username)} — ${f.status}"><span class="afw-av-wrap">${_av(f, sz)}<span class="afw-status-dot afw-${f.status||'offline'}"></span></span></button>`;
+  };
 
   // ── Homepage-versie (volledig) ──
   const widget = document.getElementById('activeFriendsWidget');
   if (widget) {
-    if (active.length === 0) {
+    if (studying.length === 0 && onBreak.length === 0) {
       widget.style.display = 'none';
       widget.innerHTML = '';
     } else {
-      const label = active.length === 1
-        ? `<strong>${_esc(active[0].username)}</strong> is aan het leren`
-        : `<strong>${active.length} vrienden</strong> leren nu`;
+      const label = studying.length === 1
+        ? `<strong>${_esc(studying[0].username)}</strong> is aan het focussen`
+        : studying.length > 1
+        ? `<strong>${studying.length} vrienden</strong> zijn nu aan het focussen`
+        : `<strong>${onBreak.length}</strong> ${onBreak.length === 1 ? 'vriend heeft' : 'vrienden hebben'} pauze`;
       widget.style.display = 'block';
       widget.innerHTML = `
         <div class="afw-inner">
           <span class="afw-dot"></span>
           <div class="afw-text">${label}</div>
           <div class="afw-avatars">
-            ${active.slice(0, 5).map(f => `<span title="${_esc(f.username)}">${_av(f, 30)}</span>`).join('')}
+            ${active.slice(0, 5).map(f => avBtn(f, 30)).join('')}
             ${active.length > 5 ? `<div class="afw-avatar afw-more">+${active.length - 5}</div>` : ''}
           </div>
         </div>`;
+      _wireAfwClicks(widget);
     }
   }
 
-  // ── App-versie (compact, in rechterkolom) ──
+  // ── App-versie (compact, in rechterkolom op Vandaag) ──
   const appWidget = document.getElementById('activeFriendsApp');
   if (appWidget) {
     if (active.length === 0) {
-      appWidget.innerHTML = '';
+      // Subtle motivational empty state — only render if user has friends
+      if (friends.length > 0) {
+        appWidget.innerHTML = `
+          <div class="afw-app-bar afw-empty">
+            <span class="afw-app-label">💪 Jij bent als eerste begonnen</span>
+          </div>`;
+      } else {
+        appWidget.innerHTML = '';
+      }
     } else {
-      const label = active.length === 1
-        ? `${_esc(active[0].username)} leert ook`
-        : `${active.length} vrienden leren`;
+      const label = studying.length > 0
+        ? (studying.length === 1
+            ? `${_esc(studying[0].username)} leert ook`
+            : `${studying.length} vrienden leren`)
+        : (onBreak.length > 0
+            ? `${onBreak.length} ${onBreak.length === 1 ? 'vriend heeft pauze' : 'vrienden hebben pauze'}`
+            : `${online.length} ${online.length === 1 ? 'vriend online' : 'vrienden online'}`);
       appWidget.innerHTML = `
         <div class="afw-app-bar">
-          <span class="afw-dot"></span>
+          <span class="afw-dot${studying.length ? '' : ' afw-dot-quiet'}"></span>
           <span class="afw-app-label">${label}</span>
           <div class="afw-avatars">
-            ${active.slice(0, 4).map(f => `<span title="${_esc(f.username)}">${_av(f, 28)}</span>`).join('')}
+            ${active.slice(0, 4).map(f => avBtn(f, 28)).join('')}
             ${active.length > 4 ? `<div class="afw-avatar afw-more">+${active.length - 4}</div>` : ''}
           </div>
         </div>`;
+      _wireAfwClicks(appWidget);
     }
   }
 
   // Homepage + dashboard live social views
   refreshSocialViews();
+}
+
+function _wireAfwClicks(host) {
+  host.querySelectorAll('.afw-pill').forEach(btn => {
+    btn.onclick = () => {
+      if (typeof window.openFriendStats === 'function') {
+        window.openFriendStats(btn.dataset.fid, btn.dataset.fname, btn.dataset.favatar);
+      }
+    };
+  });
 }
 
 function _esc(s) {

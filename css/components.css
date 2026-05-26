@@ -958,3 +958,51 @@ body.running #extendBtns { display: flex; }
   white-space: normal;
 }
 .stat-info:hover .stat-info-tip { opacity: 1; }
+
+/* ══════════════════════════════════════════════════════
+   BREAK BLOCKS — editable, preset chips, color distinction
+   ══════════════════════════════════════════════════════ */
+.block-item.pause-block .bi-body { cursor:pointer; }
+.block-item.pause-block .bi-body:hover { background:rgba(129,140,248,0.08); }
+.block-item.pause-block .bi-meta { color:#a5b4fc; }
+.bi-num-pause { background:#818cf8 !important; color:#0a0c1c !important; }
+.bi-pause-presets { display:flex; gap:6px; flex-wrap:wrap; }
+.bi-pause-preset {
+  background:var(--bg3); border:1px solid var(--border);
+  color:var(--mid); border-radius:99px; padding:5px 12px;
+  font-size:11.5px; font-weight:600; cursor:pointer;
+  font-family:var(--ff); transition:all .15s;
+}
+.bi-pause-preset:hover { border-color:#818cf8; color:#a5b4fc; }
+.bi-pause-preset.on { background:#818cf8; border-color:#818cf8; color:#0a0c1c; }
+
+/* day-bar pause blocks tinted indigo + show duration label on hover */
+.db-block { position:relative; }
+
+/* zen-strip pauses distinct */
+.zs-block.zs-pause { background:rgba(129,140,248,0.12) !important; }
+.zs-block.zs-pause .zs-label { color:#a5b4fc !important; }
+
+/* ══════════════════════════════════════════════════════
+   BACK BUTTON — consistent chip styling
+   ══════════════════════════════════════════════════════ */
+.flow-back, .planner-head .flow-back {
+  display:inline-flex; align-items:center; gap:6px;
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--text); border-radius:99px;
+  padding:8px 14px 8px 11px;
+  font-size:13px; font-weight:600; font-family:var(--ff);
+  cursor:pointer; transition:all .18s;
+}
+.flow-back:hover { border-color:var(--accent); color:var(--accent); transform:translateX(-2px); }
+.flow-back:active { transform:translateX(-1px) scale(0.98); }
+.flow-back span:first-child { font-size:16px; line-height:1; margin-top:-1px; }
+
+/* progress page back button matches */
+#progBackBtn {
+  background:var(--bg2); border:1px solid var(--border);
+  color:var(--text); border-radius:99px;
+  padding:8px 14px; font-size:13px; font-weight:600;
+  transition:all .18s; cursor:pointer;
+}
+#progBackBtn:hover { border-color:var(--accent); color:var(--accent); transform:translateX(-2px); }

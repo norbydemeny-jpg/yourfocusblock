@@ -192,3 +192,72 @@
   background: var(--accent);
   border: 2px solid var(--bg2);
 }
+
+/* ══════════════════════════════════════════════════════
+   FRIEND STATS POPUP
+   ══════════════════════════════════════════════════════ */
+.fs-head { display:flex; align-items:center; gap:14px; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--border); }
+.fs-headinfo { display:flex; flex-direction:column; gap:2px; }
+.fs-name { font-size:18px; font-weight:700; color:var(--text); }
+.fs-sub  { font-size:12.5px; color:var(--muted); }
+.fs-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:18px; }
+.fs-cell { background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:12px 10px; text-align:center; }
+.fs-cell-lbl { font-size:11.5px; color:var(--muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:.06em; }
+.fs-cell-val { font-size:18px; font-weight:700; font-family:var(--fm); color:var(--text); }
+.fs-section-title { font-size:13.5px; font-weight:700; color:var(--text); margin:6px 0 10px; }
+.fs-subj-list { display:flex; flex-direction:column; gap:8px; }
+.fs-subj-row { display:grid; grid-template-columns:130px 1fr 40px 60px; gap:10px; align-items:center; padding:6px 4px; font-size:12.5px; }
+.fs-subj-name { display:flex; align-items:center; gap:8px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.fs-subj-dot  { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+.fs-subj-bar  { height:8px; background:var(--bg3); border-radius:4px; overflow:hidden; }
+.fs-subj-fill { display:block; height:100%; border-radius:4px; transition:width .4s ease; }
+.fs-subj-sess { font-family:var(--fm); color:var(--muted); text-align:right; font-size:12px; }
+.fs-subj-time { font-family:var(--fm); color:var(--text); text-align:right; font-weight:600; }
+.fs-empty { padding:14px; text-align:center; color:var(--muted); font-size:13px; }
+
+/* ══════════════════════════════════════════════════════
+   FRIENDS — "view all" + clickable + week section
+   ══════════════════════════════════════════════════════ */
+.fr-clickable { cursor:pointer; }
+.fr-view-all-btn {
+  display:block; margin:10px auto 4px;
+  background:transparent; border:1px solid var(--border);
+  color:var(--mid); padding:8px 16px; border-radius:99px;
+  font-size:12.5px; font-weight:600; font-family:var(--ff);
+  cursor:pointer; transition:all .18s;
+}
+.fr-view-all-btn:hover { border-color:var(--accent); color:var(--accent); }
+
+.fr-week-section { margin-bottom:14px; padding-bottom:12px; border-bottom:1px dashed var(--border); }
+.fr-week-title { font-size:12.5px; font-weight:700; color:var(--mid); margin-bottom:10px; letter-spacing:.02em; }
+.fr-week-row { display:flex; gap:8px; overflow-x:auto; padding-bottom:4px; }
+.fr-week-chip {
+  display:flex; align-items:center; gap:8px;
+  background:var(--bg3); border:1px solid var(--border); border-radius:99px;
+  padding:5px 12px 5px 5px; flex-shrink:0; cursor:pointer; transition:border-color .15s;
+}
+.fr-week-chip:hover { border-color:var(--accent); }
+.fr-week-name { font-size:12.5px; font-weight:600; color:var(--text); }
+.fr-week-mins { font-family:var(--fm); font-size:11.5px; color:var(--accent); font-weight:700; }
+
+/* ══════════════════════════════════════════════════════
+   ACTIVE FRIENDS WIDGET — clickable pills + status colors
+   ══════════════════════════════════════════════════════ */
+.afw-pill {
+  background:transparent; border:0; padding:0; cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+  border-radius:50%; transition:transform .15s;
+}
+.afw-pill:hover { transform:translateY(-2px); }
+.afw-av-wrap { position:relative; display:inline-block; }
+.afw-status-dot {
+  position:absolute; right:-1px; bottom:-1px;
+  width:10px; height:10px; border-radius:50%;
+  border:2px solid var(--bg2);
+}
+.afw-status-dot.afw-studying { background:#4ade80; box-shadow:0 0 6px rgba(74,222,128,0.6); }
+.afw-status-dot.afw-break    { background:#fbbf24; }
+.afw-status-dot.afw-online   { background:#60a5fa; }
+.afw-status-dot.afw-offline  { background:#6b7280; }
+.afw-app-bar.afw-empty { opacity:0.7; justify-content:center; }
+.afw-dot-quiet { background:#fbbf24 !important; box-shadow:0 0 8px rgba(251,191,36,0.5) !important; }

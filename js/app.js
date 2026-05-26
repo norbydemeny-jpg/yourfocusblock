@@ -9,20 +9,23 @@ let _restoredDay = false;
 
 /* ====================== SCREEN ROUTER ====================== */
 const SCREENS = ['home','overview','flow','planner','agenda','app','progress'];
-// which global-nav tab lights up for each screen
 const NAV_MAP = { app:'today', overview:'overview', agenda:'agenda', progress:'progress' };
+let _prevScreen = 'app'; // last-shown screen — used so the planner can return to where you came from
 function showScreen(id){
+  // remember which non-planner/flow screen the user was on, so backFromPlanner can return
+  const current = SCREENS.find(s => { const el = document.getElementById(s); return el && !el.classList.contains('out'); });
+  if(current && current !== id && current !== 'planner' && current !== 'flow') _prevScreen = current;
   SCREENS.forEach(s => {
     const el = document.getElementById(s);
     if(!el) return;
     if(s === id){ el.style.display = 'flex'; requestAnimationFrame(() => el.classList.remove('out')); }
     else { el.classList.add('out'); el.style.display = 'none'; }
   });
-  // global nav: visible everywhere except the onboarding/planning flow
   document.body.classList.toggle('nav-on', id !== 'flow');
   setActiveNav(NAV_MAP[id] || null);
   window.scrollTo(0, 0);
 }
+window.fbPrevScreen = () => _prevScreen;
 
 function setActiveNav(navId){
   document.querySelectorAll('.nav-tab, .botnav-tab').forEach(t => {
@@ -676,14 +679,46 @@ function renderBlocks(){
       item.innerHTML = `
         <div class="bi-head">
           ${dragHandle}
-          <div class="bi-num">⏸</div>
-          <div class="bi-body">
-            <div class="bi-name">${esc(T('phase_long'))}</div>
-            <div class="bi-meta">${b.mins} min</div>
+          <div class="bi-num bi-num-pause">⏸</div>
+          <div class="bi-body" data-edit="${i}">
+            <div class="bi-name">${esc(T('break_word'))}</div>
+            <div class="bi-meta">${b.mins} min${b.note ? ' · ' + esc((b.note||'').substring(0,30)) : ''}</div>
           </div>
           ${blocks.length > 1 ? `<button class="bi-del-quick" title="${esc(T('del_lbl'))}" aria-label="${esc(T('del_lbl'))}">✕</button>` : ''}
+        </div>
+        <div class="bi-edit" id="biEdit${i}">
+          <div style="display:flex;gap:8px;align-items:center;"><span style="font-size:12px;color:var(--muted)">${esc(T('br_edit_lbl'))}</span><input class="bi-mins" type="number" min="2" max="60" step="1" value="${b.mins}" style="width:80px;"></div>
+          <div class="bi-pause-presets">
+            ${[5, 10, 15, 25].map(p => `<button type="button" class="bi-pause-preset${b.mins === p ? ' on' : ''}" data-p="${p}">${p}m</button>`).join('')}
+          </div>
+          <textarea class="bi-note" placeholder="${esc(T('br_note_ph'))}">${esc(b.note || '')}</textarea>
+          <div style="display:flex;gap:8px;"><button class="ctrl-btn bi-save" style="flex:1;">${esc(T('save'))}</button></div>
         </div>`;
+      item.querySelector('.bi-body').onclick = (e) => { if(e.target.closest('.bi-drag,.bi-del-quick')) return; toggleEdit(i); };
       if(blocks.length > 1) item.querySelector('.bi-del-quick').onclick = (e) => { e.stopPropagation(); deleteBlock(i); };
+      const minsInp = item.querySelector('.bi-mins');
+      if(minsInp){
+        minsInp.oninput = (e) => {
+          b.mins = Math.max(2, Math.min(60, +e.target.value || 2));
+          item.querySelectorAll('.bi-pause-preset').forEach(p => p.classList.toggle('on', +p.dataset.p === b.mins));
+          if(i === curBlock && !running){ timeLeft = b.mins * 60; totalTime = b.mins * 60; drawRing && drawRing(); updateTimeText && updateTimeText(); updateEndsPill && updateEndsPill(); }
+          saveData();
+        };
+      }
+      item.querySelectorAll('.bi-pause-preset').forEach(btn => {
+        btn.onclick = () => {
+          b.mins = +btn.dataset.p;
+          if(minsInp) minsInp.value = b.mins;
+          item.querySelectorAll('.bi-pause-preset').forEach(p => p.classList.toggle('on', +p.dataset.p === b.mins));
+          if(i === curBlock && !running){ timeLeft = b.mins * 60; totalTime = b.mins * 60; drawRing && drawRing(); updateTimeText && updateTimeText(); updateEndsPill && updateEndsPill(); }
+          saveData(); renderBlocks(); openEdit(i);
+        };
+      });
+      const noteEl = item.querySelector('.bi-note');
+      if(noteEl) noteEl.oninput = (e) => { b.note = e.target.value; };
+      const saveBtn = item.querySelector('.bi-save');
+      if(saveBtn) saveBtn.onclick = () => { editingBlock = null; saveData(); renderApp(); };
+      if(editingBlock === i){ const ed = item.querySelector('#biEdit' + i); if(ed) ed.classList.add('open'); }
     } else {
       const meta = `${b.mins} min${taskCount ? ` · ${doneTasks}/${taskCount} ✓` : ''}${b.skipped ? ' · ' + esc(T('skip')) : ''}`;
       item.innerHTML = `
@@ -772,7 +807,15 @@ function wireBlockEdit(item, b, i){
     tl.appendChild(row);
   });
   item.querySelector('.bi-addtask').onclick = () => { b.tasks.push({text:'', done:false}); renderBlocks(); openEdit(i); };
-  item.querySelector('.bi-save').onclick = () => { if(b.subject) addSubject(b.subject); editingBlock = null; saveData(); renderApp(); };
+  item.querySelector('.bi-save').onclick = () => {
+    if(b.subject){
+      const name = b.subject.trim();
+      const isNew = !subjects.some(s => s.name.toLowerCase() === name.toLowerCase());
+      addSubject(name);
+      if(isNew && name) banner(Tf('subj_added', {name: name}));
+    }
+    editingBlock = null; saveData(); renderApp();
+  };
   if(editingBlock === i){ const ed = item.querySelector('#biEdit' + i); if(ed) ed.classList.add('open'); }
 }
 
@@ -915,10 +958,11 @@ async function init(){
     if(running){ e.preventDefault(); e.returnValue = T('leave_warn'); return T('leave_warn'); }
   });
 
-  // routing
+  // routing — after onboarding, the first screen the user sees is Vandaag (timer).
+  // If a day was restored, drop straight onto it; otherwise prime a ready focus block.
   if(!onboarded){ startOnboard(); }
   else if(_restoredDay && blocks.length){ goApp(); banner(Tf('sess_of', {a:Math.min(curBlock+1, blocks.length), b:blocks.length})); }
-  else { goHome(); }
+  else { goToday(); }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1196,10 +1240,15 @@ function renderAgenda(){
     const cellDate = new Date(y,mo,d);
     const isToday = ds === today;
     const inWeek = cellDate >= weekStart && cellDate <= weekEnd;
-    const cls = 'agm-day' + (isToday?' is-today':'') + (inWeek?' in-week':'');
+    const isPast = ds < today;
+    const cls = 'agm-day' + (isToday?' is-today':'') + (inWeek?' in-week':'') + (isPast?' is-past':' is-future');
     const hasExam = examDates.some(e => e.date === ds);
-    const hasPlan = !!dayPlans[ds];
-    mini += `<button class="${cls}" onclick="agendaOpenDay('${ds}')">${d}${hasExam||hasPlan?`<span class="agm-dot${hasExam?' exam':''}"></span>`:''}</button>`;
+    const hasPlan = !!dayPlans[ds] || (isToday && blocks.length > 0);
+    let marks = '';
+    if(hasPlan && hasExam) marks = `<span class="agm-marks"><span class="agm-dot plan"></span><span class="agm-dot exam"></span></span>`;
+    else if(hasPlan) marks = `<span class="agm-marks"><span class="agm-dot plan"></span></span>`;
+    else if(hasExam) marks = `<span class="agm-marks"><span class="agm-dot exam"></span></span>`;
+    mini += `<button class="${cls}${hasPlan?' has-plan':''}${hasExam?' has-exam':''}" onclick="agendaOpenDay('${ds}')" title="${ds}">${d}${marks}</button>`;
   }
 
   const upcoming = _agUpcomingExams();
@@ -1225,7 +1274,13 @@ function renderAgenda(){
           <button class="ag-mini-nav" onclick="agendaNavMonth(1)" aria-label="next">›</button>
         </div>
         <div class="ag-mini-grid">${mini}</div>
+        <div class="ag-mini-legend">
+          <span class="agl"><span class="agl-dot today"></span>${esc(T('ag_legend_today'))}</span>
+          <span class="agl"><span class="agl-dot plan"></span>${esc(T('ag_legend_planned'))}</span>
+          <span class="agl"><span class="agl-dot exam"></span>${esc(T('ag_legend_exam'))}</span>
+        </div>
       </div>
+      <button class="ag-plan-day-btn" onclick="planFromAgenda('${_agIsoDate(focusDate)}')">${esc(T('ag_plan_btn_full'))}</button>
       <button class="ag-add-exam-btn" onclick="openExamModal()">${esc(T('agenda_add_exam'))}</button>
       <div class="ag-upcoming">
         <div class="ag-up-title">${esc(T('agenda_upcoming'))}</div>
@@ -1382,7 +1437,23 @@ function openExamModal(examId){
       </div>
       <div>
         <div class="bd-field-lbl">${T('exam_date')}</div>
-        <input class="bd-subj-input" id="examDateInput" type="date" value="${ex ? ex.date : todayStr()}">
+        <div class="exam-date-presets" id="examDatePresets">
+          ${(() => {
+            const base = new Date();
+            const chips = [
+              {lbl: T('agenda_tomorrow'), days: 1},
+              {lbl: '+3', days: 3},
+              {lbl: '+1 wk', days: 7},
+              {lbl: '+2 wk', days: 14},
+            ];
+            return chips.map(c => {
+              const d = new Date(base); d.setDate(d.getDate() + c.days);
+              const ds = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+              return `<button class="exam-date-chip" type="button" onclick="examPickDate('${ds}');return false;">${esc(c.lbl)}</button>`;
+            }).join('');
+          })()}
+        </div>
+        <input class="bd-subj-input" id="examDateInput" type="date" min="${todayStr()}" value="${ex ? ex.date : todayStr()}">
       </div>
       <div>
         <div class="bd-field-lbl">${T('exam_time')}</div>
@@ -1393,7 +1464,7 @@ function openExamModal(examId){
         <input class="bd-subj-input" id="examNoteInput" type="text" placeholder="${T('exam_note')}" value="${esc(ex ? (ex.note||'') : '')}">
       </div>
       <div>
-        <div class="bd-field-lbl">Kleur</div>
+        <div class="bd-field-lbl">${T('color') || 'Kleur'}</div>
         <div class="exam-color-row" id="examColorRow">${colorPicker}</div>
         <input type="hidden" id="examColorVal" value="${ex ? (ex.color||examColors[0]) : examColors[0]}">
       </div>
@@ -1412,6 +1483,11 @@ function examPickSubj(name){
 function examSubjChange(v){
   document.querySelectorAll('#examModalBody .bd-subj-chip').forEach(c => c.classList.toggle('active', c.textContent === v));
 }
+function examPickDate(ds){
+  const inp = document.getElementById('examDateInput');
+  if(inp) inp.value = ds;
+  document.querySelectorAll('#examDatePresets .exam-date-chip').forEach(c => c.classList.toggle('active', c.dataset.ds === ds));
+}
 function examPickColor(c){
   document.getElementById('examColorVal').value = c;
   document.querySelectorAll('.exam-color-dot').forEach(d => d.classList.toggle('active', d.style.background === c || d.style.backgroundColor === c));
@@ -1419,7 +1495,12 @@ function examPickColor(c){
 function saveExamModal(){
   const subj = document.getElementById('examSubjInput').value.trim();
   const date = document.getElementById('examDateInput').value;
-  if(!subj || !date){ banner('Vul vak en datum in.'); return; }
+  if(!subj || !date){ banner(T('fill_fields') || 'Vul vak en datum in.'); return; }
+  // auto-add subject if new
+  if(subj && !subjects.some(s => s.name.toLowerCase() === subj.toLowerCase())){
+    addSubject(subj);
+    banner(Tf('subj_added', {name: subj}));
+  }
   const ex = {
     id: _editingExamId || ('ex_' + Date.now()),
     subject: subj,
