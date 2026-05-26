@@ -223,8 +223,8 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', () => _goOffline());
 
-// ── Auth state ─────────────────────────────────────────
-supabase.auth.onAuthStateChange(async (event, session) => {
+// ── Auth state listener helper ──────────────────────────
+async function handleStatusAuthStateChange(event, session) {
   _myId = session?.user?.id ?? null;
 
   if (event === 'SIGNED_IN' && _myId) {
@@ -246,7 +246,7 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   }
 
   _updateLbAreas(_myId);
-});
+}
 
 // ── Periodieke refresh: zelfs zonder TOKEN_REFRESHED-event soms de
 //    friends data opnieuw ophalen zodat statuses/lijst niet vastlopen
@@ -275,6 +275,8 @@ function _updateLbAreas(userId) {
     await loadFriendsAndSubscribe();
   }
   _updateLbAreas(_myId);
+  // Register the auth listener after page load initialization to avoid race conditions
+  supabase.auth.onAuthStateChange(handleStatusAuthStateChange);
 })();
 
 // ── Expose aan window ──────────────────────────────────

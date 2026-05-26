@@ -34,6 +34,19 @@ window.fbAuthReady = new Promise(resolve => {
   resolveAuthReady = resolve;
 });
 
+async function _withTimeout(promise, ms, defaultValue) {
+  let timeoutId;
+  const timeoutPromise = new Promise(resolve => {
+    timeoutId = setTimeout(() => {
+      console.warn('[Auth] Database/Auth call timed out after ' + ms + 'ms');
+      resolve(defaultValue);
+    }, ms);
+  });
+  const result = await Promise.race([promise, timeoutPromise]);
+  clearTimeout(timeoutId);
+  return result;
+}
+
 // ── Helpers ────────────────────────────────────────────
 function generateReferralCode(username) {
   const prefix = (username || 'USER')
@@ -90,11 +103,15 @@ async function getCurrentUser() {
 // en upsert zodat parallelle SIGNED_IN-events geen dubbele rijen of races geven.
 async function ensureProfile(user) {
   try {
-    const { data: existing, error: selErr } = await supabase
+    const selectPromise = supabase
       .from('profiles')
       .select('id, username, avatar_url, referral_code')
       .eq('id', user.id)
       .maybeSingle();
+
+    const selectRes = await _withTimeout(selectPromise, 4000, { data: null, error: { message: 'Timeout select profiles' } });
+    const existing = selectRes?.data;
+    const selErr = selectRes?.error;
 
     if (selErr) console.warn('[Auth] profile select warn:', selErr.message);
     if (existing) return existing;
@@ -104,27 +121,32 @@ async function ensureProfile(user) {
     _pendingUsername    = null;
     const referral_code = generateReferralCode(baseName);
 
-    const { data: created, error } = await supabase
+    const upsertPromise = supabase
       .from('profiles')
       .upsert({ id: user.id, username: baseName, referral_code }, { onConflict: 'id' })
       .select()
       .maybeSingle();
 
+    const upsertRes = await _withTimeout(upsertPromise, 4000, { data: null, error: { message: 'Timeout upsert profile' } });
+    const created = upsertRes?.data;
+    const error = upsertRes?.error;
+
     if (error) {
       // Username could clash (unique constraint) — retry once with a suffix
       if (/duplicate|unique/i.test(error.message || '')) {
         const alt = (baseName.substring(0, 24) + Math.floor(Math.random()*9000+1000)).substring(0,30);
-        const retry = await supabase
+        const retryPromise = supabase
           .from('profiles')
           .upsert({ id: user.id, username: alt, referral_code: generateReferralCode(alt) }, { onConflict: 'id' })
           .select()
           .maybeSingle();
-        if (retry.error) console.error('[Auth] Profiel aanmaken faalt (retry):', retry.error.message);
-        return retry.data || null;
+        const retryRes = await _withTimeout(retryPromise, 4000, { data: null, error: { message: 'Timeout retry upsert' } });
+        if (retryRes?.error) console.error('[Auth] Profiel aanmaken faalt (retry):', retryRes.error.message);
+        return retryRes?.data || null;
       }
       console.error('[Auth] Profiel aanmaken mislukt:', error.message);
     }
-    return created;
+    return created || null;
   } catch (e) {
     console.error('[Auth] ensureProfile fout:', e.message);
     return null;
@@ -325,7 +347,9 @@ function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g
 // ── Profiel laden / cachen ─────────────────────────────
 async function loadMyProfile(userId){
   try {
-    const { data } = await supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
+    const queryPromise = supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
+    const res = await _withTimeout(queryPromise, 4000, { data: null });
+    const data = res?.data;
     _myProfile = data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
   } catch { _myProfile = { id: userId, username: '', avatar_url: '' }; }
   return _myProfile;
@@ -351,12 +375,14 @@ async function updateAuthUI(user) {
   } else {
     _myProfile = null;
     document.querySelectorAll('.auth-area').forEach(area => {
+      const loginTxt = typeof T === 'function' ? T('auth_login') : 'Inloggen';
       area.innerHTML = `
-        <button class="icon-btn" onclick="openAuthModal()" title="Inloggen / Registreren">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+        <button class="nav-login-btn" onclick="openAuthModal()" title="${loginTxt}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" width="17" height="17">
             <circle cx="12" cy="8" r="4"/>
             <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
           </svg>
+          <span class="nav-login-btn-txt">${loginTxt}</span>
         </button>`;
     });
   }
@@ -386,8 +412,8 @@ async function updateMyProfile(fields){
 window.updateMyProfile = updateMyProfile;
 window.fbRefreshProfile = async () => { if (_currentUser){ await loadMyProfile(_currentUser.id); renderAuthChip(); } };
 
-// ── Auth state listener ─────────────────────────────────
-supabase.auth.onAuthStateChange(async (event, session) => {
+// ── Auth state listener helper ──────────────────────────
+async function handleAuthStateChange(event, session) {
   const user = session?.user ?? null;
 
   if (event === 'SIGNED_IN' && user) {
@@ -395,15 +421,31 @@ supabase.auth.onAuthStateChange(async (event, session) => {
   }
 
   await updateAuthUI(user);
-});
+}
 
 // ── Init: herstel bestaande sessie bij pagina laden ─────
 (async () => {
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await _withTimeout(
+      supabase.auth.getSession(),
+      4000,
+      { data: { session: null } }
+    );
     if (session?.user) {
-      await ensureProfile(session.user);
-      await updateAuthUI(session.user);
+      // Wrap in a timeout to guarantee resolving fbAuthReady even if db queries hang
+      await Promise.race([
+        (async () => {
+          await ensureProfile(session.user);
+          await updateAuthUI(session.user);
+        })(),
+        new Promise(res => setTimeout(() => {
+          console.warn('[Auth] Profile loading timed out on init');
+          _currentUser = session.user;
+          _myProfile = { id: session.user.id, username: (session.user.email || 'user').split('@')[0], avatar_url: '' };
+          renderAuthChip();
+          res();
+        }, 4000))
+      ]);
     } else {
       await updateAuthUI(null);
     }
@@ -412,6 +454,8 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     await updateAuthUI(null);
   } finally {
     resolveAuthReady();
+    // Register the listener for all subsequent auth events
+    supabase.auth.onAuthStateChange(handleAuthStateChange);
   }
 })();
 

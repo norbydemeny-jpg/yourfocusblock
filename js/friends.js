@@ -24,16 +24,7 @@ function getCurrentUserId() {
   return null;
 }
 
-// Wis de cache wanneer auth-state verandert (login/logout/refresh).
-supabase.auth.onAuthStateChange((event, session) => {
-  _userIdCache = session?.user?.id ?? null;
-  if (event === 'SIGNED_OUT') _friendsCache = null;
-  // Bij TOKEN_REFRESHED of SIGNED_IN: cache niet wissen maar wel verversen.
-  if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-    // Trigger een silent refresh van de friends cache.
-    _refreshFriendsCacheSilent();
-  }
-});
+// Cache will be cleared/refreshed in the consolidated auth state listener at the end of the file.
 
 async function _refreshFriendsCacheSilent(){
   try {
@@ -534,13 +525,25 @@ async function updateFriendsUI(userId) {
   });
 }
 
-supabase.auth.onAuthStateChange(async (event, session) => {
-  await updateFriendsUI(session?.user?.id ?? null);
-});
+async function handleFriendsAuthStateChange(event, session) {
+  const userId = session?.user?.id ?? null;
+  _userIdCache = userId;
+
+  if (event === 'SIGNED_OUT') {
+    _friendsCache = null;
+  } else if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+    _refreshFriendsCacheSilent();
+  }
+
+  await updateFriendsUI(userId);
+}
 
 (async () => {
   await window.fbAuthReady;
-  await updateFriendsUI(window.fbUserId());
+  _userIdCache = window.fbUserId();
+  await updateFriendsUI(_userIdCache);
+  // Register the auth listener after page load initialization to avoid race conditions
+  supabase.auth.onAuthStateChange(handleFriendsAuthStateChange);
 })();
 
 // ══════════════════════════════════════════════════════
