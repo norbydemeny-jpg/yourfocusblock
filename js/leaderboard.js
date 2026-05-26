@@ -54,37 +54,42 @@ async function _loadData() {
   weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
 
   // Profielen + sessies parallel
-  const [profRes, sessRes] = await Promise.all([
-    supabase.from('profiles').select('id, username, avatar_url').in('id', allIds),
-    supabase.from('study_sessions')
-      .select('user_id, minutes, completed_at')
-      .in('user_id', allIds)
-      .gte('completed_at', weekStart.toISOString())
-      .eq('block_type', 'focus')
-  ]);
+  try {
+    const [profRes, sessRes] = await Promise.all([
+      supabase.from('profiles').select('id, username, avatar_url').in('id', allIds),
+      supabase.from('study_sessions')
+        .select('user_id, minutes, completed_at')
+        .in('user_id', allIds)
+        .gte('completed_at', weekStart.toISOString())
+        .eq('block_type', 'focus')
+    ]);
 
-  if (profRes.error) console.error('[Leaderboard] profiles err:', profRes.error.message);
-  if (sessRes.error) console.error('[Leaderboard] sessions err:', sessRes.error.message);
+    if (profRes.error) console.error('[Leaderboard] profiles err:', profRes.error.message);
+    if (sessRes.error) console.error('[Leaderboard] sessions err:', sessRes.error.message);
 
-  const pm = {};
-  (profRes.data || []).forEach(p => { pm[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
-  // Als een vriend-profile/sessie door RLS niet leesbaar is, hebben we nog
-  // steeds de ID maar geen username → toon dat duidelijk i.p.v. een '?'.
-  allIds.forEach(id => {
-    if (!pm[id] && id !== userId) pm[id] = { username: T('lb_unknown_friend') || 'Vriend', avatar_url: '' };
-  });
+    const pm = {};
+    (profRes.data || []).forEach(p => { pm[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
+    // Als een vriend-profile/sessie door RLS niet leesbaar is, hebben we nog
+    // steeds de ID maar geen username → toon dat duidelijk i.p.v. een '?'.
+    allIds.forEach(id => {
+      if (!pm[id] && id !== userId) pm[id] = { username: T('lb_unknown_friend') || 'Vriend', avatar_url: '' };
+    });
 
-  const todayMins = {}, weekMins = {};
-  allIds.forEach(id => { todayMins[id] = 0; weekMins[id] = 0; });
+    const todayMins = {}, weekMins = {};
+    allIds.forEach(id => { todayMins[id] = 0; weekMins[id] = 0; });
 
-  (sessRes.data || []).forEach(s => {
-    weekMins[s.user_id]  = (weekMins[s.user_id]  || 0) + s.minutes;
-    if (new Date(s.completed_at) >= todayStart) {
-      todayMins[s.user_id] = (todayMins[s.user_id] || 0) + s.minutes;
-    }
-  });
+    (sessRes.data || []).forEach(s => {
+      weekMins[s.user_id]  = (weekMins[s.user_id]  || 0) + s.minutes;
+      if (new Date(s.completed_at) >= todayStart) {
+        todayMins[s.user_id] = (todayMins[s.user_id] || 0) + s.minutes;
+      }
+    });
 
-  return { userId, allIds, pm, todayMins, weekMins };
+    return { userId, allIds, pm, todayMins, weekMins };
+  } catch (err) {
+    console.error('[Leaderboard] Netwerk/API fout:', err);
+    return null;
+  }
 }
 
 // ── Modal openen / sluiten ─────────────────────────────

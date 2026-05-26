@@ -1054,8 +1054,8 @@ function deleteEditingBlock(){
 function startFromPlanner(){
   if(!D.bb || !D.bb.some(b => !b.isPause)){ banner(T('dpl_empty')); return; }
 
-  // Build blocks array for the session
-  blocks = D.bb.map(b => ({
+  // Build local array for the session
+  const newBlocks = D.bb.map(b => ({
     id: nid++,
     subject: b.isPause ? '__pause__' : (b.subject || T('dpl_type_focus')),
     mins: b.mins || (b.isPause ? 10 : 50),
@@ -1066,7 +1066,7 @@ function startFromPlanner(){
   }));
 
   // Derive focus duration from the most common focus block length
-  const focLens = blocks.filter(b => !b.isPause).map(b => b.mins);
+  const focLens = newBlocks.filter(b => !b.isPause).map(b => b.mins);
   const focMode = focLens.sort((a,b) => focLens.filter(v => v===a).length - focLens.filter(v => v===b).length).pop();
   S.focus = focMode || 50;
 
@@ -1078,7 +1078,7 @@ function startFromPlanner(){
 
   // If planning for a future date (from agenda), save to dayPlans instead of starting
   if(_planningForDate && _planningForDate !== todayStr() && _planningForDate !== studyDayStr()){
-    dayPlans[_planningForDate] = { startTime: plannerStartTime || '09:00', blocks: blocks.map(b => ({...b})) };
+    dayPlans[_planningForDate] = { startTime: plannerStartTime || '09:00', blocks: newBlocks };
     _planningForDate = null;
     D.bb = [];
     saveData();
@@ -1086,7 +1086,9 @@ function startFromPlanner(){
     goAgenda();
     return;
   }
+  
   _planningForDate = null;
+  blocks = newBlocks;
 
   initDay(); saveData();
   D.bb = []; // clear planner draft

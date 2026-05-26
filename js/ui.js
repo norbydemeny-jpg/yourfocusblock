@@ -166,17 +166,25 @@ function attachPointerDrag(host, getItems, getIdx, onReorder){
     lastDropIdx = null;
     try{ host.setPointerCapture(e.pointerId); }catch(err){}
   }, {passive:false});
+  let rafId = null;
   host.addEventListener('pointermove', (e) => {
     if(fromIdx === null || !ghost) return;
     e.preventDefault();
-    ghost.style.top = (e.clientY - ghostOffY) + 'px';
-    const drop = calcDropIdx(e.clientY);
-    const eff = drop > fromIdx ? drop-1 : drop;
-    if(eff !== fromIdx){ showDropLine(drop); }
-    else{ host.querySelectorAll('.bb-drop-line').forEach(l => l.remove()); lastDropIdx = null; }
+    if(rafId) return;
+    const clientY = e.clientY;
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      if (!ghost) return;
+      ghost.style.top = (clientY - ghostOffY) + 'px';
+      const drop = calcDropIdx(clientY);
+      const eff = drop > fromIdx ? drop-1 : drop;
+      if(eff !== fromIdx){ showDropLine(drop); }
+      else{ host.querySelectorAll('.bb-drop-line').forEach(l => l.remove()); lastDropIdx = null; }
+    });
   }, {passive:false});
   function endDrag(){
     if(fromIdx === null) return;
+    if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
     if(ghost){ ghost.remove(); ghost = null; }
     host.querySelectorAll('.bb-drop-line').forEach(l => l.remove());
     getItems().forEach(el => el.style.opacity = '');

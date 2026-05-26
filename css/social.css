@@ -111,20 +111,75 @@
   background: var(--bg3);
 }
 
-/* ── Compacte actieve-vrienden balk in app rechterkolom ── */
-.afw-app-bar {
+/* ── Compacte actieve-vrienden balk in app rechterkolom (VERVALLEN, NU PROMINENT) ── */
+.afw-prominent {
+  margin-top: 1.5rem;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  justify-content: center;
+}
+
+.afw-prominent-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: rgba(200, 240, 96, 0.08);
+  border: 1px solid rgba(200, 240, 96, 0.2);
+  border-radius: 99px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.afw-prominent-bar:hover {
+  transform: translateY(-2px);
+  background: rgba(200, 240, 96, 0.12);
+}
+
+.afw-prominent-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-right: 8px;
+}
+
+.afw-prominent-empty {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  text-align: center;
+  padding: 10px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.afw-prominent-avatars {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  background: rgba(200, 240, 96, 0.04);
 }
-.afw-app-label {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--mid);
+
+.afw-prominent-avatars .afw-pill {
+  margin-left: -10px;
+  transition: transform 0.2s ease, z-index 0s;
+  position: relative;
+}
+
+.afw-prominent-avatars .afw-pill:first-child {
+  margin-left: 0;
+}
+
+.afw-prominent-avatars .afw-pill:hover {
+  transform: translateY(-4px) scale(1.1);
+  z-index: 10;
+}
+
+.afw-prominent-more {
+  width: 44px;
+  height: 44px;
+  margin-left: -10px;
+  font-size: 13px;
+  z-index: 1;
 }
 
 /* ── Leaderboard knop in topbar ── */

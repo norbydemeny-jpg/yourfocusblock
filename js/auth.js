@@ -20,7 +20,7 @@ function _avSafe(url){ return (typeof url === 'string' && /^(data:image\/|https:
 function fbAvatarHTML(name, url, size){
   size = size || 36;
   const safe = _avSafe(url);
-  if (safe) return `<span class="fb-av" style="width:${size}px;height:${size}px"><img src="${safe.replace(/"/g,'&quot;')}" alt="" loading="lazy"></span>`;
+  if (safe) return `<span class="fb-av" style="width:${size}px;height:${size}px"><img src="${safe.replace(/"/g,'&quot;')}" alt="" style="object-fit:cover;"></span>`;
   const initial = (String(name || '?').trim()[0] || '?').toUpperCase();
   return `<span class="fb-av fb-av-init" style="width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px;background:${fbAvatarColor(name)};color:#0c0e06">${initial}</span>`;
 }
@@ -245,12 +245,16 @@ async function handleLogin() {
   if (!email || !password) {
     showAuthMsg('authLoginMsg', T('auth_fill_email_pw')); return;
   }
+  const btn = document.querySelector('#authLoginForm button[type="submit"]');
   try {
+    if (btn) btn.disabled = true;
     showAuthMsg('authLoginMsg', T('auth_busy'), false);
     await login(email, password);
     closeAuthModal();
+    if (btn) btn.disabled = false;
     toast(T('auth_welcome_back'));
   } catch (e) {
+    if (btn) btn.disabled = false;
     const raw = e?.message || '';
     // Account bestond al vóór email-confirmation uit stond → toon resend-link
     if (/email not confirmed/i.test(raw)) {
@@ -439,14 +443,15 @@ window.updateMyProfile = updateMyProfile;
 window.fbRefreshProfile = async () => { if (_currentUser){ await loadMyProfile(_currentUser.id); renderAuthChip(); } };
 
 // ── Auth state listener helper ──────────────────────────
-async function handleAuthStateChange(event, session) {
+function handleAuthStateChange(event, session) {
   const user = session?.user ?? null;
 
-  if (event === 'SIGNED_IN' && user) {
-    await ensureProfile(user);
-  }
-
-  await updateAuthUI(user);
+  (async () => {
+    if (event === 'SIGNED_IN' && user) {
+      await ensureProfile(user);
+    }
+    await updateAuthUI(user);
+  })();
 }
 
 // ── Init: herstel bestaande sessie bij pagina laden ─────

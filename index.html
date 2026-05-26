@@ -65,7 +65,7 @@
       <button class="nav-quick-btn" onclick="startMode('blocks')" id="navQuickBtn">⚡ Quick blocks</button>
       <div class="leaderboard-area" id="lbAreaNav"></div>
       <div class="friends-area" id="friendsAreaNav"></div>
-      <button class="icon-btn nav-set-btn" onclick="openSettings()" title="Settings" id="navSetBtn">
+      <button class="icon-btn nav-set-btn" onclick="openSettings()" title="Settings" aria-label="Settings" id="navSetBtn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="19" height="19"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
       <div class="auth-area" id="authAreaNav"></div>
@@ -111,7 +111,7 @@
         <div class="leaderboard-area" id="lbAreaHome"></div>
         <div class="friends-area" id="friendsAreaHome"></div>
         <div class="auth-area" id="authAreaHome"></div>
-        <button class="icon-btn" onclick="openSettings()" title="Settings">⚙</button>
+        <button class="icon-btn" onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button>
       </div>
     </div>
     <div class="home-hero fade-in">
@@ -193,7 +193,7 @@
   <div class="modal">
     <div class="modal-head">
       <div class="modal-title" id="examModalTitle">Examen toevoegen</div>
-      <button class="modal-x" onclick="closeExamModal()">✕</button>
+      <button class="modal-x" onclick="closeExamModal()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="examModalBody"></div>
   </div>
@@ -208,13 +208,13 @@
     </div>
     <div class="tb-right">
       <div class="tb-streak desktop-only" onclick="goProgress()"><span>🔥</span><span id="appStreakNum">0</span></div>
-      <button class="icon-btn desktop-only" onclick="goProgress()" title="Progress">📊</button>
-      <button class="icon-btn" onclick="enterZen()" title="Fullscreen focus">⛶</button>
+      <button class="icon-btn desktop-only" onclick="goProgress()" title="Progress" aria-label="Progress">📊</button>
+      <button class="icon-btn" onclick="enterZen()" title="Fullscreen focus" aria-label="Fullscreen focus">⛶</button>
       <div class="leaderboard-area desktop-only" id="lbAreaApp"></div>
       <div class="friends-area desktop-only" id="friendsAreaApp"></div>
       <div class="auth-area desktop-only" id="authAreaApp"></div>
-      <button class="icon-btn desktop-only" onclick="openSettings()" title="Settings">⚙</button>
-      <button class="icon-btn desktop-only" onclick="goHome()" title="Home">⌂</button>
+      <button class="icon-btn desktop-only" onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button>
+      <button class="icon-btn desktop-only" onclick="goHome()" title="Home" aria-label="Home">⌂</button>
     </div>
   </div>
   <div class="app-body" id="appBody">
@@ -255,6 +255,7 @@
           </div>
           <div class="minimal-time" id="minimalTime">50:00</div>
           <div class="companion-stage" id="companionStage"></div>
+          <div id="activeFriendsApp" class="afw-prominent"></div>
           <div class="ends-pill"><span class="ep-lbl" id="epLbl">Ends at</span><span class="ep-val" id="epVal">—</span><span class="ep-note" id="epNote"></span></div>
           <div class="controls">
             <button class="ctrl-btn" id="btnRestart" onclick="resetTimer()">Restart</button>
@@ -274,8 +275,6 @@
         <div class="rc-endtime" id="rcEndtime"></div>
         <button class="modal-x mob-only" onclick="closePlanning()" style="width:30px;height:30px;">✕</button>
       </div>
-      <!-- Actieve vrienden in app — gevuld door status.js -->
-      <div id="activeFriendsApp"></div>
       <div class="blocks-list" id="blocksList"></div>
       <div class="rc-foot">
         <div class="quick-add-label" id="quickAddLabel">Quick add</div>
@@ -337,7 +336,7 @@
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-title" id="setTitle">Settings</div>
-      <button class="modal-x" onclick="closeSettings()">✕</button>
+      <button class="modal-x" onclick="closeSettings()" aria-label="Close">✕</button>
     </div>
     <div class="set-tabs" id="setTabs"></div>
     <div class="modal-body" id="setBody"></div>
@@ -377,7 +376,7 @@
   <div class="modal modal-lg">
     <div class="modal-head">
       <div class="modal-title" id="bdTitle">Block details</div>
-      <button class="modal-x" onclick="closeBlockDetail()">✕</button>
+      <button class="modal-x" onclick="closeBlockDetail()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="bdBody"></div>
     <div class="bd-foot">
@@ -392,7 +391,7 @@
   <div class="modal invite-modal">
     <div class="modal-head">
       <div class="modal-title" id="inviteTitle">Share FocusBlock 💫</div>
-      <button class="modal-x" onclick="closeInvite()">✕</button>
+      <button class="modal-x" onclick="closeInvite()" aria-label="Close">✕</button>
     </div>
     <div class="invite-body">
       <div class="invite-sub" id="inviteSub"></div>
@@ -411,7 +410,7 @@
   <div class="modal">
     <div class="modal-head">
       <div class="modal-title">Vrienden</div>
-      <button class="modal-x" onclick="closeFriendsModal()">✕</button>
+      <button class="modal-x" onclick="closeFriendsModal()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="friendsModalBody">
       <!-- Gevuld door friends.js -->
@@ -424,7 +423,7 @@
   <div class="modal">
     <div class="modal-head">
       <div class="modal-title">🏆 Ranglijst</div>
-      <button class="modal-x" onclick="closeLeaderboard()">✕</button>
+      <button class="modal-x" onclick="closeLeaderboard()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="leaderboardBody">
       <!-- Gevuld door leaderboard.js -->
@@ -437,7 +436,7 @@
   <div class="modal">
     <div class="modal-head">
       <div class="modal-title" id="friendStatsTitle">Statistieken</div>
-      <button class="modal-x" onclick="closeFriendStats()">✕</button>
+      <button class="modal-x" onclick="closeFriendStats()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="friendStatsBody"></div>
   </div>
@@ -448,7 +447,7 @@
   <div class="modal">
     <div class="modal-head">
       <div class="modal-title">Account</div>
-      <button class="modal-x" onclick="closeAuthModal()">✕</button>
+      <button class="modal-x" onclick="closeAuthModal()" aria-label="Close">✕</button>
     </div>
     <div class="modal-body" id="authModalBody">
       <!-- Wordt gevuld door auth.js -->

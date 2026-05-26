@@ -144,8 +144,8 @@ function renderWidget(friends) {
       // Subtle motivational empty state — only render if user has friends
       if (friends.length > 0) {
         appWidget.innerHTML = `
-          <div class="afw-app-bar afw-empty">
-            <span class="afw-app-label">💪 Jij bent als eerste begonnen</span>
+          <div class="afw-prominent-empty">
+            <span>💪 Jij bent als eerste begonnen</span>
           </div>`;
       } else {
         appWidget.innerHTML = '';
@@ -159,12 +159,12 @@ function renderWidget(friends) {
             ? `${onBreak.length} ${onBreak.length === 1 ? 'vriend heeft pauze' : 'vrienden hebben pauze'}`
             : `${online.length} ${online.length === 1 ? 'vriend online' : 'vrienden online'}`);
       appWidget.innerHTML = `
-        <div class="afw-app-bar">
+        <div class="afw-prominent-bar">
           <span class="afw-dot${studying.length ? '' : ' afw-dot-quiet'}"></span>
-          <span class="afw-app-label">${label}</span>
-          <div class="afw-avatars">
-            ${active.slice(0, 4).map(f => avBtn(f, 28)).join('')}
-            ${active.length > 4 ? `<div class="afw-avatar afw-more">+${active.length - 4}</div>` : ''}
+          <span class="afw-prominent-label">${label}</span>
+          <div class="afw-prominent-avatars">
+            ${active.slice(0, 4).map(f => avBtn(f, 44)).join('')}
+            ${active.length > 4 ? `<div class="afw-avatar afw-more afw-prominent-more">+${active.length - 4}</div>` : ''}
           </div>
         </div>`;
       _wireAfwClicks(appWidget);
@@ -228,7 +228,7 @@ async function handleStatusAuthStateChange(event, session) {
   _myId = session?.user?.id ?? null;
 
   if (event === 'SIGNED_IN' && _myId) {
-    await updateMyStatus('offline'); // begin als offline totdat timer start
+    await updateMyStatus('online'); // begin als online
     await loadFriendsAndSubscribe();
   } else if (event === 'TOKEN_REFRESHED' && _myId) {
     // Toegangstoken is ververst — herstart de realtime-subscription en
@@ -271,7 +271,7 @@ function _updateLbAreas(userId) {
   await window.fbAuthReady;
   _myId = getCurrentUserId();
   if (_myId) {
-    await updateMyStatus('offline');
+    await updateMyStatus('online');
     await loadFriendsAndSubscribe();
   }
   _updateLbAreas(_myId);

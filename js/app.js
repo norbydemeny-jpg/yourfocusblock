@@ -762,7 +762,7 @@ function renderBlocks(){
             ${[5, 10, 15, 25].map(p => `<button type="button" class="bi-pause-preset${b.mins === p ? ' on' : ''}" data-p="${p}">${p}m</button>`).join('')}
           </div>
           <textarea class="bi-note" placeholder="${esc(T('br_note_ph'))}">${esc(b.note || '')}</textarea>
-          <div style="display:flex;gap:8px;"><button class="ctrl-btn bi-save" style="flex:1;">${esc(T('save'))}</button></div>
+          <div style="display:flex;gap:8px;"><button type="button" class="btn-primary bi-save" style="flex:1;">${esc(T('save'))}</button></div>
         </div>`;
       item.querySelector('.bi-body').onclick = (e) => { if(e.target.closest('.bi-drag,.bi-del-quick')) return; toggleEdit(i); };
       if(blocks.length > 1) item.querySelector('.bi-del-quick').onclick = (e) => { e.stopPropagation(); deleteBlock(i); };
@@ -808,7 +808,7 @@ function renderBlocks(){
           <textarea class="bi-note" placeholder="${esc(T('note_ph'))}">${esc(b.note || '')}</textarea>
           <div class="bi-tasklist" id="biTasks${i}"></div>
           <button class="bb-add-task bi-addtask">${esc(T('add_task'))}</button>
-          <div style="display:flex;gap:8px;"><button class="ctrl-btn bi-save" style="flex:1;">${esc(T('save'))}</button></div>
+          <div style="display:flex;gap:8px;"><button type="button" class="btn-primary bi-save" style="flex:1;">${esc(T('save'))}</button></div>
         </div>`;
       item.querySelector('.bi-body').onclick = (e) => { if(e.target.closest('.bi-drag,.bi-del-quick')) return; toggleEdit(i); };
       if(blocks.length > 1) item.querySelector('.bi-del-quick').onclick = (e) => { e.stopPropagation(); deleteBlock(i); };
@@ -892,6 +892,18 @@ function wireBlockEdit(item, b, i){
 function toggleEdit(i){ editingBlock = (editingBlock === i) ? null : i; renderBlocks(); }
 function openEdit(i){ editingBlock = i; const ed = document.getElementById('biEdit' + i); if(ed) ed.classList.add('open'); }
 
+// Close edit block when clicking outside
+document.addEventListener('click', (e) => {
+  if(editingBlock !== null && !e.target.closest('.block-item') && !e.target.closest('.modal-ov')) {
+    const b = blocks[editingBlock];
+    if(b && b.subject){
+      const name = b.subject.trim();
+      if(name && !subjects.some(s => s.name.toLowerCase() === name.toLowerCase())){ addSubject(name); }
+    }
+    editingBlock = null; saveData(); renderApp();
+  }
+});
+
 function moveBlock(i, dir){
   const j = i + dir; if(j < 0 || j >= blocks.length) return;
   [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
@@ -914,7 +926,13 @@ function addQuickBlock(mins){
 
 function addQuickPause(kind){
   const mins = kind === 'long' ? (S.long || 25) : (S.short || 10);
-  blocks.push({id:nid++, isPause:true, mins, note:'', tasks:[], done:false});
+  const pb = {id:nid++, isPause:true, mins, note:'', tasks:[], done:false};
+  // If timer is active or we're halfway through, insert right after the current block
+  if (running && curBlock !== null && curBlock < blocks.length - 1) {
+    blocks.splice(curBlock + 1, 0, pb);
+  } else {
+    blocks.push(pb);
+  }
   saveData(); renderApp();
 }
 
@@ -976,7 +994,13 @@ function openLongBreakModal(){
 }
 function closeLongBreakModal(){ document.getElementById('lbPromptOv')?.remove(); }
 function confirmLongBreak(mins){
-  blocks.push({id:nid++, isPause:true, mins, note: T('lb_long_break_note') || 'Lange pauze', tasks:[], done:false});
+  const pb = {id:nid++, isPause:true, mins, note: T('lb_long_break_note') || 'Lange pauze', tasks:[], done:false};
+  if (curBlock !== null && curBlock < blocks.length) {
+    // Insert after current block since the user just finished one
+    blocks.splice(curBlock + 1, 0, pb);
+  } else {
+    blocks.push(pb);
+  }
   closeLongBreakModal();
   saveData(); renderApp();
   banner(Tf('lb_long_break_added', {n: mins}) || `Pauze van ${mins} min toegevoegd`);
@@ -992,7 +1016,8 @@ function addBlock(){
 
 function deleteBlock(i){
   blocks.splice(i, 1);
-  if(curBlock >= blocks.length) curBlock = Math.max(0, blocks.length - 1);
+  if (i < curBlock) curBlock--;
+  if (curBlock >= blocks.length) curBlock = Math.max(0, blocks.length - 1);
   editingBlock = null;
   if(!blocks.length){
     saveData();
@@ -1344,6 +1369,7 @@ function _agWireDrag(){
   const pxPerMin = HOUR_PX / 60;
   // Drempel voor "echte drag" zodat een tap niet per ongeluk een verschuiving wordt.
   const DRAG_THRESHOLD = 6;
+  let _justDragged = false;
 
   document.querySelectorAll('.ag-block').forEach(el => {
     const isExam = el.classList.contains('ag-block-exam');
@@ -1402,6 +1428,10 @@ function _agWireDrag(){
           el.removeEventListener('pointerup', onUp);
           el.removeEventListener('pointercancel', onUp);
           el.classList.remove('ag-block-dragging', 'ag-block-resize-top', 'ag-block-resize-bottom', 'ag-block-move');
+          if(movedFar){
+            _justDragged = true;
+            setTimeout(() => _justDragged = false, 150);
+          }
           if(!movedFar){
             el.style.top = startTop + 'px';
             el.style.height = startHeight + 'px';
@@ -1437,7 +1467,7 @@ function _agWireDrag(){
     // Click → open editor (today → goToday, dayPlan → editDayPlan, exam → open exam modal)
     el.addEventListener('click', (e) => {
       // ignore if a drag just happened (height/top was changed)
-      if(el.classList.contains('ag-block-dragging')) return;
+      if(_justDragged || el.classList.contains('ag-block-dragging')) return;
       e.stopPropagation();
       if(isExam){
         const examId = el.dataset.examId;
