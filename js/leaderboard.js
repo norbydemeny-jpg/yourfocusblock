@@ -32,11 +32,12 @@ async function _loadData() {
   if (!userId) return null;
 
   // Vrienden ophalen
-  const { data: fships } = await supabase
+  const { data: fships, error: fErr } = await supabase
     .from('friendships')
     .select('requester_id, receiver_id')
     .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
     .eq('status', 'accepted');
+  if (fErr) console.error('[Leaderboard] friendships err:', fErr.message);
 
   const allIds = [
     userId,
@@ -62,8 +63,16 @@ async function _loadData() {
       .eq('block_type', 'focus')
   ]);
 
+  if (profRes.error) console.error('[Leaderboard] profiles err:', profRes.error.message);
+  if (sessRes.error) console.error('[Leaderboard] sessions err:', sessRes.error.message);
+
   const pm = {};
   (profRes.data || []).forEach(p => { pm[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
+  // Als een vriend-profile/sessie door RLS niet leesbaar is, hebben we nog
+  // steeds de ID maar geen username → toon dat duidelijk i.p.v. een '?'.
+  allIds.forEach(id => {
+    if (!pm[id] && id !== userId) pm[id] = { username: T('lb_unknown_friend') || 'Vriend', avatar_url: '' };
+  });
 
   const todayMins = {}, weekMins = {};
   allIds.forEach(id => { todayMins[id] = 0; weekMins[id] = 0; });

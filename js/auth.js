@@ -46,7 +46,14 @@ function toast(msg) {
 // ── Auth functies (ook beschikbaar via window.*) ───────
 async function register(email, password, username) {
   _pendingUsername = username.trim();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  // Supabase v2 ondersteunt het meegeven van metadata aan signUp; de
+  // username staat zo ook in auth.users.user_metadata als backup voor
+  // ensureProfile (handig als _pendingUsername verloren is bij een refresh).
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { username: _pendingUsername } }
+  });
   if (error) throw error;
   return data;
 }
@@ -55,6 +62,11 @@ async function login(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data;
+}
+
+async function resendConfirmation(email) {
+  const { error } = await supabase.auth.resend({ type: 'signup', email });
+  if (error) throw error;
 }
 
 async function logout() {
@@ -68,27 +80,44 @@ async function getCurrentUser() {
 }
 
 // ── Profiel aanmaken / ophalen ─────────────────────────
+// Idempotent: gebruikt maybeSingle() zodat het niet faalt bij ontbrekende rij,
+// en upsert zodat parallelle SIGNED_IN-events geen dubbele rijen of races geven.
 async function ensureProfile(user) {
   try {
-    const { data: existing } = await supabase
+    const { data: existing, error: selErr } = await supabase
       .from('profiles')
-      .select('id, username')
+      .select('id, username, avatar_url, referral_code')
       .eq('id', user.id)
-      .single();
+      .maybeSingle();
 
+    if (selErr) console.warn('[Auth] profile select warn:', selErr.message);
     if (existing) return existing;
 
-    const username      = (_pendingUsername || user.email.split('@')[0]).substring(0, 30);
+    const metaName      = user?.user_metadata?.username;
+    const baseName      = (_pendingUsername || metaName || (user.email || 'user').split('@')[0] || 'user').trim().substring(0, 30) || 'user';
     _pendingUsername    = null;
-    const referral_code = generateReferralCode(username);
+    const referral_code = generateReferralCode(baseName);
 
     const { data: created, error } = await supabase
       .from('profiles')
-      .insert({ id: user.id, username, referral_code })
+      .upsert({ id: user.id, username: baseName, referral_code }, { onConflict: 'id' })
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) console.error('[Auth] Profiel aanmaken mislukt:', error.message);
+    if (error) {
+      // Username could clash (unique constraint) — retry once with a suffix
+      if (/duplicate|unique/i.test(error.message || '')) {
+        const alt = (baseName.substring(0, 24) + Math.floor(Math.random()*9000+1000)).substring(0,30);
+        const retry = await supabase
+          .from('profiles')
+          .upsert({ id: user.id, username: alt, referral_code: generateReferralCode(alt) }, { onConflict: 'id' })
+          .select()
+          .maybeSingle();
+        if (retry.error) console.error('[Auth] Profiel aanmaken faalt (retry):', retry.error.message);
+        return retry.data || null;
+      }
+      console.error('[Auth] Profiel aanmaken mislukt:', error.message);
+    }
     return created;
   } catch (e) {
     console.error('[Auth] ensureProfile fout:', e.message);
@@ -194,7 +223,26 @@ async function handleLogin() {
     closeAuthModal();
     toast(T('auth_welcome_back'));
   } catch (e) {
-    showAuthMsg('authLoginMsg', _friendlyError(e.message));
+    const raw = e?.message || '';
+    // Account bestond al vóór email-confirmation uit stond → toon resend-link
+    if (/email not confirmed/i.test(raw)) {
+      const msgEl = document.getElementById('authLoginMsg');
+      if (msgEl) {
+        msgEl.innerHTML = `${_esc(T('auth_err_unconfirmed') || 'Account nog niet bevestigd via e-mail.')} <a href="#" id="authResendLink" style="color:var(--brand);text-decoration:underline;cursor:pointer">${_esc(T('auth_resend') || 'Opnieuw versturen')}</a>`;
+        msgEl.className = 'auth-msg auth-error';
+        document.getElementById('authResendLink')?.addEventListener('click', async (ev) => {
+          ev.preventDefault();
+          try {
+            await resendConfirmation(email);
+            showAuthMsg('authLoginMsg', T('auth_resent') || 'Bevestigingsmail opnieuw verstuurd.', false);
+          } catch (er) {
+            showAuthMsg('authLoginMsg', _friendlyError(er?.message || 'Fout bij versturen.'));
+          }
+        });
+      }
+      return;
+    }
+    showAuthMsg('authLoginMsg', _friendlyError(raw));
   }
 }
 
@@ -211,26 +259,35 @@ async function handleRegister() {
     showAuthMsg('authRegMsg', T('auth_creating'), false);
     const data = await register(email, password, username);
 
-    // If a session was returned (email confirmation disabled in Supabase), we're done.
+    // Pad 1: Supabase gaf direct een sessie terug — email-confirmation is uit.
     if (data.session) {
+      // ensureProfile draait ook automatisch via SIGNED_IN, maar we forceren hier
+      // zodat de welkom-toast de juiste username toont.
+      try { await ensureProfile(data.session.user); } catch {}
       closeAuthModal();
-      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Account! ' + username));
+      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Welkom, ' + username + '!'));
       return;
     }
 
-    // Otherwise try direct sign-in (works when the email confirmation isn't required
-    // even though Supabase didn't return a session in the signUp response).
+    // Pad 2: signUp gaf user terug maar geen sessie. Dat gebeurt soms ook
+    // als confirmation uit staat. Probeer direct in te loggen.
     try {
       await login(email, password);
       closeAuthModal();
-      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Account! ' + username));
-    } catch {
-      // Email confirmation is required by the project; user must verify their inbox.
-      // (Disable it under: Supabase → Authentication → Providers → Email → Confirm email.)
-      showAuthMsg('authRegMsg', T('auth_check_email') || 'Check your e-mail to confirm your account.', false);
+      toast(typeof Tf === 'function' ? Tf('auth_account_created', {name: username}) : ('Welkom, ' + username + '!'));
+      return;
+    } catch (le) {
+      const lm = le?.message || '';
+      // Pad 3: confirmation staat dus tóch nog aan in het Supabase project.
+      if (/email not confirmed/i.test(lm)) {
+        showAuthMsg('authRegMsg', T('auth_check_email') || 'Bevestig je account via de e-mail die we net hebben gestuurd.', false);
+        return;
+      }
+      // Onbekend; toon de echte foutmelding zodat we niet stilletjes falen.
+      showAuthMsg('authRegMsg', _friendlyError(lm));
     }
   } catch (e) {
-    showAuthMsg('authRegMsg', _friendlyError(e.message));
+    showAuthMsg('authRegMsg', _friendlyError(e?.message || ''));
   }
 }
 
@@ -245,13 +302,16 @@ async function handleLogout() {
 }
 
 function _friendlyError(msg) {
-  if (msg.includes('Invalid login credentials'))   return T('auth_err_invalid');
-  if (msg.includes('Email not confirmed'))          return T('auth_err_invalid');
-  if (msg.includes('User already registered'))      return T('auth_err_already');
-  if (msg.includes('Password should be at least'))  return T('auth_err_minpw');
-  if (msg.includes('Unable to validate'))           return T('auth_err_connect');
-  if (msg.includes('rate limit exceeded'))          return T('auth_err_rate_limit') || 'Too many requests. Please try again later.';
-  return msg;
+  msg = String(msg || '');
+  if (/Invalid login credentials/i.test(msg))   return T('auth_err_invalid');
+  if (/Email not confirmed/i.test(msg))         return T('auth_err_unconfirmed') || 'Bevestig je account eerst via e-mail.';
+  if (/User already registered/i.test(msg))     return T('auth_err_already');
+  if (/Password should be at least/i.test(msg)) return T('auth_err_minpw');
+  if (/Unable to validate/i.test(msg))          return T('auth_err_connect');
+  if (/rate limit exceeded|too many requests/i.test(msg))
+                                                return T('auth_err_rate_limit') || 'Te veel pogingen — probeer het zo opnieuw.';
+  if (/network|failed to fetch/i.test(msg))     return T('auth_err_connect') || 'Geen verbinding met de server.';
+  return msg || (T('auth_err_unknown') || 'Onbekende fout — probeer opnieuw.');
 }
 
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }

@@ -106,19 +106,21 @@ async function declineRequest(friendshipId) {
 async function getFriends() {
   const userId = await getCurrentUserId();
   if (!userId) return [];
-  const { data: fships } = await supabase
+  const { data: fships, error: fErr } = await supabase
     .from('friendships')
     .select('id, requester_id, receiver_id')
     .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
     .eq('status', 'accepted');
+  if (fErr) { console.error('[Friends] friendships query failed:', fErr.message); throw fErr; }
   if (!fships || fships.length === 0) return [];
   const otherIds = fships.map(f =>
     f.requester_id === userId ? f.receiver_id : f.requester_id
   );
-  const { data: profiles } = await supabase
+  const { data: profiles, error: pErr } = await supabase
     .from('profiles')
     .select('id, username, avatar_url')
     .in('id', otherIds);
+  if (pErr) console.warn('[Friends] profiles query warn:', pErr.message);
   const pm = {};
   (profiles || []).forEach(p => { pm[p.id] = p; });
   return fships.map(f => {
@@ -169,6 +171,15 @@ function switchFriendsTab(tab) {
   renderFriendsModal();
 }
 
+// Run an async fn with a hard timeout so the modal never hangs forever on
+// a broken RLS policy or stalled network. Throws a tagged error on timeout.
+function _withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout:${label}`)), ms))
+  ]);
+}
+
 async function renderFriendsModal() {
   const body = document.getElementById('friendsModalBody');
   if (!body) return;
@@ -180,13 +191,17 @@ async function renderFriendsModal() {
   body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">${T('fr_loading')}</div>`;
 
   try {
-    const userId = await getCurrentUserId();
+    const userId = await _withTimeout(getCurrentUserId(), 5000, 'session');
     if (!userId) {
       body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('fr_login_msg')}</p>`;
       return;
     }
 
-    const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
+    const [friends, requests] = await _withTimeout(
+      Promise.all([getFriends(), getIncomingRequests()]),
+      10000,
+      'friends'
+    );
     const reqCount = requests.length;
 
     const friendIds = friends.map(f => f.friend_id);
@@ -219,8 +234,16 @@ async function renderFriendsModal() {
     else                                 renderSearch(content);
 
   } catch (e) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('fr_load_err')}</p>
-      <div style="text-align:center"><button class="btn-ghost" onclick="renderFriendsModal()">${T('fr_retry')}</button></div>`;
+    const msg = String(e?.message || '');
+    const detail = /^timeout:/.test(msg)
+      ? (T('fr_timeout') || 'De server reageert niet. Check je verbinding.')
+      : (msg.includes('row-level security') || msg.includes('permission denied'))
+        ? (T('fr_rls_hint') || 'Database-toegang geweigerd. Controleer je RLS-policies in Supabase.')
+        : (T('fr_load_err') || 'Kon vrienden niet laden.');
+    body.innerHTML = `
+      <p style="text-align:center;color:var(--muted);padding:1.5rem 0 0.5rem">${detail}</p>
+      <p style="text-align:center;color:var(--muted);font-size:0.8rem;opacity:0.7;margin:0">${escHtml(msg).slice(0,160)}</p>
+      <div style="text-align:center;margin-top:1rem"><button class="btn-ghost" onclick="renderFriendsModal()">${T('fr_retry') || 'Opnieuw'}</button></div>`;
     console.error('[Friends] renderFriendsModal error:', e);
   }
 }
