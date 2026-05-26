@@ -96,7 +96,7 @@ function renderProgress(){
     <div class="stats-panel">
       <div class="sp-head"><span>${esc(T('stats_per_subject'))} ${esc(rangeLbl)}</span></div>
       <div class="ssub-headrow"><span>${esc(T('stats_subject'))}</span><span></span><span class="ssub-c">${esc(T('stats_sessions'))}</span><span class="ssub-t">${esc(T('stats_total_time'))}</span></div>
-      ${subs.length ? subs.map(s => { const w = Math.round(s.mins/maxS*100); const col = colorFor(s.name); return `<div class="ssub-row"><span class="ssub-name"><span class="ssub-dot" style="background:${col}"></span>${esc(s.name)}</span><span class="ssub-bar"><span class="ssub-fill" data-w="${w}" style="width:0%;background:${col}"></span></span><span class="ssub-c">${s.sessions}</span><span class="ssub-t">${_stFmtH(s.mins)}</span></div>`; }).join('') : `<div class="stats-empty">${esc(T('no_subj_data'))}</div>`}
+      ${subs.length ? subs.map(s => { const w = Math.round(s.mins/maxS*100); const col = colorFor(s.name); return `<div class="ssub-row"><span class="ssub-name"><span class="ssub-dot" style="background:${col}"></span>${esc(s.name)}</span><span class="ssub-bar"><span class="ssub-fill" data-w="${w}" style="width:0%;background:${col}"></span></span><span class="ssub-c">${s.sessions}</span><span class="ssub-t">${_stFmtH(s.mins)}</span></div>`; }).join('') : `<div class="stats-empty"><div style="margin-bottom:10px">${esc(T('no_subj_data'))}</div>${subjects.length < 2 ? `<button class="btn-primary" style="font-size:13px;padding:8px 16px;" onclick="openSettings('subjects')">＋ ${esc(T('subj_add_cta') || 'Vakken toevoegen')}</button>` : ''}</div>`}
       <div class="ssub-foot">${esc(T('stats_rounded'))}</div>
     </div>
 

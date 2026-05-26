@@ -140,7 +140,43 @@ function renderHome(){
   });
 
   renderHomeSocial();
+  renderHomeSubjectNudge();
 }
+
+// Nudge naar vakken-toevoegen: alleen tonen als de gebruiker minder dan 2
+// vakken heeft maar wel al activiteit (zodat een nieuwe user geen direct
+// in-your-face prompt krijgt — die heeft de onboarding al gehad).
+function renderHomeSubjectNudge(){
+  let host = document.getElementById('homeSubjNudge');
+  if(!host){
+    const wrap = document.querySelector('.home-wrap');
+    if(!wrap) return;
+    host = document.createElement('div');
+    host.id = 'homeSubjNudge';
+    host.className = 'home-subj-nudge fade-in';
+    const social = document.getElementById('homeSocial');
+    if(social && social.parentNode) social.parentNode.insertBefore(host, social.nextSibling);
+    else wrap.appendChild(host);
+  }
+  const enoughSubjects = subjects.length >= 2;
+  const dismissed     = sessionStorage.getItem('fb_subjNudgeDismissed') === '1';
+  const hasActivity   = lifetimeBlocks > 0 || (blocks && blocks.length > 0);
+  if(enoughSubjects || dismissed || !hasActivity){ host.style.display = 'none'; host.innerHTML = ''; return; }
+  host.style.display = '';
+  host.innerHTML = `
+    <button class="subj-nudge-close" aria-label="✕" onclick="dismissSubjNudge()">✕</button>
+    <div class="subj-nudge-icon">📚</div>
+    <div class="subj-nudge-body">
+      <div class="subj-nudge-title">${esc(T('home_subj_nudge_t'))}</div>
+      <div class="subj-nudge-desc">${esc(T('home_subj_nudge_d'))}</div>
+    </div>
+    <button class="subj-nudge-cta" onclick="openSettings('subjects')">${esc(T('home_subj_nudge_btn'))} →</button>`;
+}
+function dismissSubjNudge(){
+  sessionStorage.setItem('fb_subjNudgeDismissed', '1');
+  const el = document.getElementById('homeSubjNudge'); if(el){ el.style.display = 'none'; el.innerHTML = ''; }
+}
+window.dismissSubjNudge = dismissSubjNudge;
 
 /* ---- avatar helper (uses fbAvatarHTML from auth.js when available) ---- */
 function _socAv(f, size){
@@ -165,8 +201,7 @@ function renderHomeSocial(){
     return;
   }
 
-  const active = (typeof window.getActiveFriends === 'function') ? (window.getActiveFriends() || []) : [];
-  const all    = (typeof window.getFriendList   === 'function') ? (window.getFriendList()   || []) : [];
+  const all = (typeof window.getFriendList === 'function') ? (window.getFriendList() || []) : [];
 
   if(!all.length){
     host.innerHTML = `
@@ -178,24 +213,57 @@ function renderHomeSocial(){
     return;
   }
 
-  let title;
-  if(active.length === 1) title = Tf('home_social_one', {name: esc(active[0].username)});
-  else if(active.length > 1) title = Tf('home_social_many', {n: active.length});
-  else title = T('home_social_none');
+  // Sorteer: studying > break > online > offline (zo motiveert het meest:
+  // wie nu studeert staat vooraan, en wie offline is is grijs zichtbaar).
+  const order = { studying:0, break:1, online:2, offline:3 };
+  const sorted = [...all].sort((a, b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
 
-  const shown = (active.length ? active : all).slice(0, 5);
-  const more = (active.length ? active.length : all.length) - shown.length;
+  const studying = sorted.filter(f => f.status === 'studying');
+  const onBreak  = sorted.filter(f => f.status === 'break');
+  const offline  = sorted.filter(f => f.status === 'offline' || !f.status);
+
+  // Subtekst: motiverende status-samenvatting.
+  let title, sub;
+  if(studying.length){
+    title = studying.length === 1
+      ? Tf('home_social_one', {name: esc(studying[0].username)}) || `${esc(studying[0].username)} is aan het focussen`
+      : Tf('home_social_many', {n: studying.length}) || `${studying.length} vrienden zijn aan het focussen`;
+    sub = offline.length ? Tf('home_social_offline_n', {n: offline.length}) || `${offline.length} offline · jouw beurt om er ook bij te zijn` : '';
+  } else if(onBreak.length){
+    title = T('home_social_break') || `${onBreak.length} vriend${onBreak.length>1?'en':''} ${onBreak.length>1?'hebben':'heeft'} pauze`;
+    sub = T('home_social_break_sub') || 'Goed moment om zelf te starten.';
+  } else {
+    title = T('home_social_none') || 'Niemand studeert nu';
+    sub = T('home_social_be_first') || 'Wees de eerste — ga jij vandaag focussen?';
+  }
+
+  const shown = sorted.slice(0, 5);
+  const more = sorted.length - shown.length;
 
   host.innerHTML = `
     <button class="home-social" onclick="openFriendsModal()">
-      <span class="hs-dot ${active.length ? 'on' : ''}"></span>
-      <span class="hs-main"><span class="hs-title">${title}</span></span>
+      <span class="hs-dot ${studying.length ? 'on' : ''}"></span>
+      <span class="hs-main">
+        <span class="hs-title">${title}</span>
+        ${sub ? `<span class="hs-sub">${sub}</span>` : ''}
+      </span>
       <span class="hs-avatars">
-        ${shown.map(f => `<span title="${esc(f.username)}">${_socAv(f, 32)}</span>`).join('')}
+        ${shown.map(f => `
+          <span class="hs-av-wrap" title="${esc(f.username)} — ${esc(_statusLbl(f.status))}">
+            ${_socAv(f, 32)}
+            <span class="hs-status-dot hs-${esc(f.status || 'offline')}"></span>
+          </span>`).join('')}
         ${more > 0 ? `<span class="hs-av hs-more">+${more}</span>` : ''}
       </span>
       <span class="hs-link">${esc(T('home_social_view'))} →</span>
     </button>`;
+}
+
+function _statusLbl(s){
+  if(s === 'studying') return T('status_studying') || 'studeert';
+  if(s === 'break')    return T('status_break')    || 'pauze';
+  if(s === 'online')   return T('status_online')   || 'online';
+  return T('status_offline') || 'offline';
 }
 window.renderHomeSocial = renderHomeSocial;
 
@@ -207,6 +275,7 @@ function renderNavLabels(){
   set('navAgendaLbl', T('agenda_title')); set('botAgendaLbl', T('agenda_title'));
   set('navStatsLbl', T('nav_stats'));     set('botStatsLbl', T('nav_stats_short'));
   set('navStatsLblShort', T('nav_stats_short'));
+  set('botQuickLbl', T('nav_quick_short') || T('card_blocks_t') || 'Snel');
   const pb = document.getElementById('navPlanBtn'); if(pb) pb.textContent = '＋ ' + T('card_plan_t');
   const qb = document.getElementById('navQuickBtn'); if(qb) qb.textContent = '⚡ ' + T('card_blocks_t');
 }
@@ -680,7 +749,7 @@ function renderBlocks(){
       item.innerHTML = `
         <div class="bi-head">
           ${dragHandle}
-          <div class="bi-num bi-num-pause">⏸</div>
+          <div class="bi-num bi-num-pause" aria-label="${esc(T('break_word'))}">☕</div>
           <div class="bi-body" data-edit="${i}">
             <div class="bi-name">${esc(T('break_word'))}</div>
             <div class="bi-meta">${b.mins} min${b.note ? ' · ' + esc((b.note||'').substring(0,30)) : ''}</div>
@@ -832,15 +901,14 @@ function moveBlock(i, dir){
 
 function addQuickBlock(mins){
   blocks.push({id:nid++, subject:'', mins, note:'', tasks:[], done:false, status:null});
-  // Auto-append a break after long focus blocks (≥45 min) — you need a pause after a long stretch.
-  // Only if the previously last block isn't already a pause (avoid double-pauses on rapid add).
-  if(mins >= 45){
-    const brMins = (S && S.short) ? S.short : 10;
-    blocks.push({id:nid++, isPause:true, mins: brMins, note:'', tasks:[], done:false});
-  }
-  checkPauseSuggestion();
-  // Sync ring to this block if it's the only/first one and timer isn't running
-  if(!running && blocks.length === 1){ timeLeft = mins * 60; totalTime = mins * 60; }
+  // Altijd een pauze toevoegen na een focus-blok — Pomodoro-flow en zorgt dat
+  // "klaar om" eerlijk klopt. Korte focus → 5 min, langere → S.short (default 10).
+  const brMins = mins < 30 ? 5 : ((S && S.short) ? S.short : 10);
+  blocks.push({id:nid++, isPause:true, mins: brMins, note:'', tasks:[], done:false});
+  // Sync ring to this block if this was the first add and timer isn't running
+  if(!running && blocks.length === 2){ timeLeft = mins * 60; totalTime = mins * 60; }
+  // Check of we de lange-pauze prompt moeten tonen (na 4 focus zonder lange pauze)
+  maybeSuggestLongBreak();
   saveData(); renderApp();
 }
 
@@ -864,6 +932,57 @@ function checkPauseSuggestion(){
     if(host){ host.before(b); setTimeout(() => b.remove && b.isConnected && b.remove(), 8000); }
   }
 }
+
+// ── Lange-pauze prompt ─────────────────────────────────────────────
+// Toont een keuze-modaal na elke 4 focus-blokken zonder lange pauze (>=15m).
+// Onthoudt per "batch" of de prompt al getoond is zodat we niet spammen.
+let _lbPromptedAt = -1;
+function maybeSuggestLongBreak(){
+  const focusBlocks = blocks.filter(b => !b.isPause);
+  const focusCount  = focusBlocks.length;
+  if(focusCount < 4 || focusCount % 4 !== 0) return;
+  if(_lbPromptedAt === focusCount) return; // al getoond voor deze batch
+  // Heeft de gebruiker recent al een lange pauze (>=15m) ingelast? Dan niet vragen.
+  const recentLong = blocks.slice(-8).some(b => b.isPause && (b.mins || 0) >= 15);
+  if(recentLong) return;
+  _lbPromptedAt = focusCount;
+  openLongBreakModal();
+}
+
+function openLongBreakModal(){
+  // Verwijder eventueel bestaande modaal eerst
+  document.getElementById('lbPromptOv')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'lbPromptOv';
+  ov.className = 'modal-ov open';
+  ov.innerHTML = `
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-head">
+        <div class="modal-title">☕ ${esc(T('lb_long_break_title') || 'Tijd voor een langere pauze?')}</div>
+        <button class="modal-x" onclick="closeLongBreakModal()">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center;padding:1.2rem 1.4rem 1.4rem;">
+        <p style="color:var(--muted);margin:0 0 1rem;font-size:14px;line-height:1.5;">
+          ${esc(T('lb_long_break_body') || 'Je hebt 4 focus-blokken op rij gepland. Een langere pauze helpt je echt resetten.')}
+        </p>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:0.8rem;">
+          ${[15, 20, 25, 30].map(m => `<button class="ctrl-btn lb-dur-btn" type="button" onclick="confirmLongBreak(${m})">${m}m</button>`).join('')}
+        </div>
+        <button class="btn-ghost" type="button" style="width:100%;" onclick="closeLongBreakModal()">${esc(T('lb_long_break_skip') || 'Nee, laat maar')}</button>
+      </div>
+    </div>`;
+  ov.onclick = (e) => { if(e.target === ov) closeLongBreakModal(); };
+  document.body.appendChild(ov);
+}
+function closeLongBreakModal(){ document.getElementById('lbPromptOv')?.remove(); }
+function confirmLongBreak(mins){
+  blocks.push({id:nid++, isPause:true, mins, note: T('lb_long_break_note') || 'Lange pauze', tasks:[], done:false});
+  closeLongBreakModal();
+  saveData(); renderApp();
+  banner(Tf('lb_long_break_added', {n: mins}) || `Pauze van ${mins} min toegevoegd`);
+}
+window.closeLongBreakModal = closeLongBreakModal;
+window.confirmLongBreak    = confirmLongBreak;
 
 function addBlock(){
   blocks.push({id:nid++, subject:'', mins:S.focus, note:'', tasks:[], done:false, status:null});
@@ -1193,55 +1312,86 @@ function _agCommitBlockMins(dateStr, idx, mins){
   }
 }
 
-/* ---- Wire mouse drag handlers on agenda blocks (resize + click-to-edit) ---- */
+/* ---- Wire pointer (mouse + touch) drag handlers on agenda blocks ---- */
 function _agWireDrag(){
-  const HOUR_PX = 56, HOURS = 13;
-  const pxPerMin = (HOUR_PX * HOURS) / (HOURS * 60);
+  // Gebruik dezelfde HOUR_PX / HOURS als renderAgenda zodat de schaal klopt.
+  const HOUR_PX = window._agHourPx   || 64;
+  const HOURS   = window._agHourSpan || 17;
+  const pxPerMin = HOUR_PX / 60;
+  // Drempel voor "echte drag" zodat een tap niet per ongeluk een verschuiving wordt.
+  const DRAG_THRESHOLD = 6;
+
   document.querySelectorAll('.ag-block').forEach(el => {
     const isExam = el.classList.contains('ag-block-exam');
     const date = el.dataset.date;
     const bidx = el.dataset.bidx;
 
     if(!isExam && bidx != null){
-      // Resize via bottom edge
-      el.addEventListener('mousedown', (e) => {
+      el.addEventListener('pointerdown', (e) => {
+        if(e.button && e.button !== 0) return;
         const rect = el.getBoundingClientRect();
-        const isResize = (e.clientY - rect.top) > (rect.height - 10);
-        if(!isResize) return;
+        const isResize = (e.clientY - rect.top) > (rect.height - 18); // grotere touch-zone
         e.preventDefault(); e.stopPropagation();
-        el.classList.add('ag-block-dragging');
+        try { el.setPointerCapture(e.pointerId); } catch {}
+
         const startY = e.clientY;
         const startHeight = el.clientHeight;
+        const startTop    = parseFloat(el.style.top) || 0;
         const timeEl = el.querySelector('.agb-time');
         let movedFar = false;
+        const mode = isResize ? 'resize' : 'move';
+        el.classList.add('ag-block-dragging', 'ag-block-' + mode);
+
         const onMove = (ev) => {
           const dy = ev.clientY - startY;
-          if(Math.abs(dy) > 3) movedFar = true;
-          const newH = Math.max(20, startHeight + dy);
-          el.style.height = newH + 'px';
-          const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
-          if(timeEl) timeEl.textContent = mins + ' min';
+          if(Math.abs(dy) > DRAG_THRESHOLD) movedFar = true;
+          if(mode === 'resize'){
+            const newH = Math.max(22, startHeight + dy);
+            el.style.height = newH + 'px';
+            const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+            if(timeEl) timeEl.textContent = mins + ' min';
+          } else {
+            // Move: schuif top, gesnapt aan 5-minuten raster (≈ HOUR_PX/12 px).
+            const snap = HOUR_PX / 12;
+            const newTop = Math.max(0, Math.min(HOURS*HOUR_PX - startHeight, startTop + Math.round(dy/snap)*snap));
+            el.style.top = newTop + 'px';
+          }
         };
         const onUp = (ev) => {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          el.classList.remove('ag-block-dragging');
-          if(!movedFar) return;
-          const dy = ev.clientY - startY;
-          const newH = Math.max(20, startHeight + dy);
-          const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
-          _agCommitBlockMins(date, +bidx, mins);
-          renderAgenda();
-          if(typeof banner === 'function') banner(mins + ' min ✓');
+          el.releasePointerCapture?.(ev.pointerId);
+          el.removeEventListener('pointermove', onMove);
+          el.removeEventListener('pointerup', onUp);
+          el.removeEventListener('pointercancel', onUp);
+          el.classList.remove('ag-block-dragging', 'ag-block-resize', 'ag-block-move');
+          if(!movedFar){ el.style.top = startTop + 'px'; el.style.height = startHeight + 'px'; return; }
+          if(mode === 'resize'){
+            const dy = ev.clientY - startY;
+            const newH = Math.max(22, startHeight + dy);
+            const mins = Math.max(5, Math.round((newH / pxPerMin) / 5) * 5);
+            _agCommitBlockMins(date, +bidx, mins);
+            renderAgenda();
+            if(typeof banner === 'function') banner(mins + ' min ✓');
+          } else {
+            // Bereken nieuw startuur: top px → minuten t.o.v. HOUR_START.
+            const newTop = parseFloat(el.style.top) || 0;
+            const minutesFromStart = Math.round((newTop / HOUR_PX) * 60 / 5) * 5;
+            const newStartTotalMin = (window._agHourStartMin || 360) + minutesFromStart;
+            _agCommitBlockStart(date, +bidx, newStartTotalMin);
+            renderAgenda();
+            const hh = String(Math.floor(newStartTotalMin/60)).padStart(2,'0');
+            const mm = String(newStartTotalMin%60).padStart(2,'0');
+            if(typeof banner === 'function') banner(`${hh}:${mm} ✓`);
+          }
         };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        el.addEventListener('pointermove', onMove);
+        el.addEventListener('pointerup', onUp);
+        el.addEventListener('pointercancel', onUp);
       });
     }
 
     // Click → open editor (today → goToday, dayPlan → editDayPlan, exam → open exam modal)
     el.addEventListener('click', (e) => {
-      // ignore if a drag just happened (height was changed)
+      // ignore if a drag just happened (height/top was changed)
       if(el.classList.contains('ag-block-dragging')) return;
       e.stopPropagation();
       if(isExam){
@@ -1257,6 +1407,30 @@ function _agWireDrag(){
       }
     });
   });
+}
+
+// Stel het startuur van een dagplan zo bij dat het opgegeven blok exact op
+// newStartTotalMin begint. De andere blokken volgen automatisch.
+function _agCommitBlockStart(dateStr, idx, newStartTotalMin){
+  newStartTotalMin = Math.max(0, Math.min(24*60-5, Math.round(newStartTotalMin)));
+  const isToday = dateStr === todayStr() && blocks.length;
+  const plan = isToday ? blocks : (_getDayPlan(dateStr)?.blocks);
+  if(!plan || !plan[idx]) return;
+  // Hoeveel minuten zit `idx` na het begin van het plan?
+  let offset = 0;
+  for(let i = 0; i < idx; i++) offset += (plan[i].mins || 25);
+  let newStartHH = Math.floor((newStartTotalMin - offset) / 60);
+  let newStartMM = ((newStartTotalMin - offset) % 60 + 60) % 60;
+  newStartHH = Math.max(0, Math.min(23, newStartHH));
+  const newStartTime = String(newStartHH).padStart(2,'0') + ':' + String(newStartMM).padStart(2,'0');
+  if(isToday){
+    plannerStartTime = newStartTime;
+  } else {
+    const dp = _getDayPlan(dateStr) || { blocks: plan, startTime: '09:00' };
+    dp.startTime = newStartTime;
+    dayPlans[dateStr] = dp;
+  }
+  saveData();
 }
 
 function _agWeekSummary(weekStartDate){
@@ -1367,9 +1541,14 @@ function renderAgenda(){
   // ── Main view ──
   let mainHtml = '';
   if(view === 'week'){
-    const HOUR_START = 8, HOUR_END = 21;
+    const HOUR_START = 6, HOUR_END = 23;
     const HOURS = HOUR_END - HOUR_START;
-    const HOUR_PX = 56;
+    // HOUR_PX is groter op smalle schermen zodat blokken (vooral pauzes)
+    // ruim genoeg zijn om aan te tikken. Wordt ook gebruikt door _agWireDrag.
+    const HOUR_PX = (typeof window !== 'undefined' && window.innerWidth <= 760) ? 78 : 64;
+    window._agHourPx     = HOUR_PX;
+    window._agHourSpan   = HOURS;
+    window._agHourStartMin = HOUR_START * 60;
     const startMinTotal = HOUR_START * 60;
     const totalMin = HOURS * 60;
 
