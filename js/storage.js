@@ -89,12 +89,12 @@ function saveData(){
   }, 400);
 }
 
-function loadLocal(){
-  try{ const r = localStorage.getItem(LS_KEY); return r ? JSON.parse(r) : null; }
+window.loadLocal = function loadData(){
+  try{ return JSON.parse(localStorage.getItem(LS_KEY)); }
   catch(e){ return null; }
 }
 
-function applyLoaded(d){
+window.applyLoaded = function applyLoaded(d){
   if(!d) return;
   onboarded = !!d.onboarded;
   userName = d.name || '';

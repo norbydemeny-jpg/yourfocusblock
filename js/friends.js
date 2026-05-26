@@ -32,7 +32,7 @@ async function _refreshFriendsCacheSilent(){
     _friendsCache = { friends, requests, ts: Date.now() };
     // Re-render als modal open is.
     if (document.getElementById('friendsOv')?.classList.contains('open')) {
-      renderFriendsModal();
+      renderFriendsModal(true);
     }
   } catch { /* stille fail — cache blijft staan */ }
 }
@@ -201,7 +201,7 @@ function _withTimeout(promise, ms, label) {
   ]);
 }
 
-async function renderFriendsModal() {
+async function renderFriendsModal(isSilentRefresh = false) {
   const body = document.getElementById('friendsModalBody');
   if (!body) return;
 
@@ -229,7 +229,7 @@ async function renderFriendsModal() {
       // Toon meteen cache, ververs in achtergrond zonder loading-state.
       friends  = _friendsCache.friends;
       requests = _friendsCache.requests;
-      _refreshFriendsCacheSilent();
+      if (!isSilentRefresh) _refreshFriendsCacheSilent();
     } else {
       [friends, requests] = await _withTimeout(
         Promise.all([getFriends(), getIncomingRequests()]),
