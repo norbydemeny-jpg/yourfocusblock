@@ -5,6 +5,26 @@
    ══════════════════════════════════════════════════════ */
 
 function buildPayload(){
+  // Bi-directional sync: Keep active blocks synchronized with dayPlans
+  const todayKey = studyDayStr();
+  const todayLitKey = todayStr();
+  if (blocks.length > 0) {
+    const formattedBlocks = blocks.map(b => ({
+      subject: b.subject,
+      mins: b.mins,
+      note: b.note || '',
+      note2: b.note2 || '',
+      tasks: (b.tasks || []).map(t => ({text: t.text, done: !!t.done})),
+      isPause: !!b.isPause,
+      done: !!b.done
+    }));
+    dayPlans[todayKey] = { startTime: plannerStartTime || '09:00', blocks: formattedBlocks };
+    dayPlans[todayLitKey] = { startTime: plannerStartTime || '09:00', blocks: formattedBlocks };
+  } else {
+    delete dayPlans[todayKey];
+    delete dayPlans[todayLitKey];
+  }
+
   return {
     v:2, onboarded, name:userName, subjects, lastPlan,
     focus:S.focus, short:S.short, long:S.long, longAfter:S.longAfter,
@@ -120,6 +140,7 @@ function finalizeDayHistory(){
   else history.push({date:t, blocks:doneBlocks.length, mins:completedMins, subjects:subjMap, subjectsCount:subjCount});
   // clear active day so it doesn't restore tomorrow
   blocks = []; // keep lastPlan
+  window.updateMyStatus?.('offline');
   saveData();
 }
 

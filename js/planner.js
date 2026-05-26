@@ -199,15 +199,32 @@ function renderStepCount(host){
 function buildAssignDrafts(){
   const durs = getDurs(); const d = durs[D.durIdx] || durs.find(x => x.rec);
   if(!D.bb) D.bb = [];
-  // preserve existing pause blocks; only resize focus blocks
-  const pauseBlocks = D.bb.filter(b => b.isPause);
-  const focusBlocks = D.bb.filter(b => !b.isPause);
-  while(focusBlocks.length < D.count) focusBlocks.push({subject:'', mins:d.min, note:'', tasks:[], noteOpen:false});
-  focusBlocks.length = D.count;
-  // default minutes to chosen duration if unset
-  focusBlocks.forEach(b => { if(!b.mins) b.mins = d.min; });
-  // pause blocks come from builder interaction via drawBuilder; keep focus blocks only here
-  D.bb = focusBlocks;
+  
+  // Extract existing focus blocks to preserve user details (subjects, notes, tasks)
+  const existingFocus = D.bb.filter(b => !b.isPause);
+  
+  // Match the requested focus block count
+  while(existingFocus.length < D.count){
+    existingFocus.push({subject:'', mins:d.min, note:'', tasks:[], noteOpen:false});
+  }
+  existingFocus.length = D.count;
+  existingFocus.forEach(b => { if(!b.mins) b.mins = d.min; });
+  
+  // Interleave focus blocks with pause blocks
+  const newBb = [];
+  for(let i = 0; i < D.count; i++){
+    newBb.push(existingFocus[i]);
+    if(i < D.count - 1){
+      // Reuse existing pause block from previous state if available to prevent overwriting custom break durations
+      const prevPause = D.bb[i * 2 + 1];
+      if(prevPause && prevPause.isPause){
+        newBb.push(prevPause);
+      } else {
+        newBb.push({subject:'__pause__', mins:d.brk, note:'', tasks:[], noteOpen:false, isPause:true});
+      }
+    }
+  }
+  D.bb = newBb;
 }
 
 /* ---- step: assign (per-block builder) ---- */
@@ -234,11 +251,13 @@ function renderStepAssign(host){
   document.getElementById('startTimeInp').oninput = (e) => { D.startTime = e.target.value; drawBuilder(); };
   document.getElementById('bbAdd25').onclick = () => {
     D.bb.push({subject:'', mins:25, note:'', tasks:[], noteOpen:false});
+    D.bb.push({subject:'__pause__', mins:5, note:'', tasks:[], noteOpen:false, isPause:true});
     D.count = D.bb.filter(b => !b.isPause).length; drawBuilder();
     setTimeout(() => { const h = document.getElementById('bbHost'); if(h) h.scrollTop = h.scrollHeight; }, 50);
   };
   document.getElementById('bbAdd50').onclick = () => {
     D.bb.push({subject:'', mins:50, note:'', tasks:[], noteOpen:false});
+    D.bb.push({subject:'__pause__', mins:10, note:'', tasks:[], noteOpen:false, isPause:true});
     D.count = D.bb.filter(b => !b.isPause).length; drawBuilder();
     setTimeout(() => { const h = document.getElementById('bbHost'); if(h) h.scrollTop = h.scrollHeight; }, 50);
   };
@@ -634,15 +653,26 @@ function goPlanner(mode){
 
   // Pre-fill D.bb if empty
   if(!D.bb || !D.bb.length){
-    const durIdx = getDurs().findIndex(d => d.rec);
-    const dur = getDurs()[durIdx >= 0 ? durIdx : 2]; // fallback to 50/10
-    const focMins = dur.min, brkMins = dur.brk;
-    // Smart suggestion: 2 focus blocks + 1 pause between them
-    D.bb = [
-      {subject: subjects.length ? subjects[0].name : '', mins: focMins, note:'', note2:'', tasks:[], isPause:false},
-      {subject:'__pause__', mins: brkMins, note:'', tasks:[], isPause:true},
-      {subject: subjects.length > 1 ? subjects[1].name : (subjects.length ? subjects[0].name : ''), mins: focMins, note:'', note2:'', tasks:[], isPause:false},
-    ];
+    if (blocks && blocks.length > 0 && !_planningForDate) {
+      D.bb = blocks.map(b => ({
+        subject: b.subject === '__pause__' ? '' : b.subject,
+        mins: b.mins,
+        note: b.note || '',
+        note2: b.note2 || '',
+        tasks: (b.tasks || []).map(t => ({text: t.text, done: !!t.done})),
+        isPause: !!b.isPause
+      }));
+    } else {
+      const durIdx = getDurs().findIndex(d => d.rec);
+      const dur = getDurs()[durIdx >= 0 ? durIdx : 2]; // fallback to 50/10
+      const focMins = dur.min, brkMins = dur.brk;
+      // Smart suggestion: 2 focus blocks + 1 pause between them
+      D.bb = [
+        {subject: subjects.length ? subjects[0].name : '', mins: focMins, note:'', note2:'', tasks:[], isPause:false},
+        {subject:'__pause__', mins: brkMins, note:'', tasks:[], isPause:true},
+        {subject: subjects.length > 1 ? subjects[1].name : (subjects.length ? subjects[0].name : ''), mins: focMins, note:'', note2:'', tasks:[], isPause:false},
+      ];
+    }
   }
 
   if(!plannerStartTime) plannerStartTime = nowRounded5();
@@ -1047,7 +1077,7 @@ function startFromPlanner(){
   };
 
   // If planning for a future date (from agenda), save to dayPlans instead of starting
-  if(_planningForDate && _planningForDate !== todayStr()){
+  if(_planningForDate && _planningForDate !== todayStr() && _planningForDate !== studyDayStr()){
     dayPlans[_planningForDate] = { startTime: plannerStartTime || '09:00', blocks: blocks.map(b => ({...b})) };
     _planningForDate = null;
     D.bb = [];

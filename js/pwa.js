@@ -20,4 +20,13 @@ function releaseWakeLock(){
 // Registered as a proper file instead of a blob URL for reliability.
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+
+  // Auto-reload the page when a new service worker takes control
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
 }

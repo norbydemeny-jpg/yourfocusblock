@@ -208,6 +208,7 @@ function renderNavLabels(){
   set('navStatsLbl', T('nav_stats'));     set('botStatsLbl', T('nav_stats_short'));
   set('navStatsLblShort', T('nav_stats_short'));
   const pb = document.getElementById('navPlanBtn'); if(pb) pb.textContent = '＋ ' + T('card_plan_t');
+  const qb = document.getElementById('navQuickBtn'); if(qb) qb.textContent = '⚡ ' + T('card_blocks_t');
 }
 
 /* ====================== DAGOVERZICHT (overview dashboard) ====================== */
@@ -874,7 +875,11 @@ function deleteBlock(i){
   blocks.splice(i, 1);
   if(curBlock >= blocks.length) curBlock = Math.max(0, blocks.length - 1);
   editingBlock = null;
-  if(!blocks.length){ goHome(); return; }
+  if(!blocks.length){
+    saveData();
+    goHome();
+    return;
+  }
   // Resync timer to the current block when not running
   if(!running){
     const cb = blocks[curBlock];
@@ -1054,8 +1059,73 @@ function agendaNavMonth(dir){
 }
 function agendaOpenDay(dateStr){
   agendaViewDate = new Date(dateStr + 'T12:00:00');
-  _agendaView = 'week';
   renderAgenda();
+  openAgendaDayOptions(dateStr);
+}
+
+function openAgendaDayOptions(dateStr) {
+  let modal = document.getElementById('agendaDayOptionsOv');
+  if(!modal){
+    modal = document.createElement('div');
+    modal.className = 'modal-ov';
+    modal.id = 'agendaDayOptionsOv';
+    document.body.appendChild(modal);
+  }
+
+  const d = new Date(dateStr + 'T12:00:00');
+  const lang = S.lang === 'en' ? 'en-US' : S.lang;
+  const dateFmt = d.toLocaleDateString(lang, {weekday:'long', day:'numeric', month:'long'});
+
+  const planExists = !!dayPlans[dateStr] || (dateStr === todayStr() && blocks.length > 0);
+
+  modal.innerHTML = `
+    <div class="modal confirm-modal" style="max-width:360px;">
+      <div class="modal-head">
+        <div class="modal-title" style="font-size:1.1rem;">${esc(dateFmt)}</div>
+        <button class="modal-x" onclick="closeAgendaDayOptions()">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:10px; padding:15px 0 5px;">
+        ${planExists 
+          ? `<button class="primary-btn" style="width:100%; text-align:center; padding:12px;" onclick="closeAgendaDayOptions(); editDayPlan('${dateStr}')">✏️ ${esc(T('agenda_edit_this') || T('agenda_edit_day'))}</button>
+             <button class="danger-btn" style="width:100%; text-align:center; padding:12px; border:1px solid #ef4444; background:rgba(239,68,68,0.1); color:#ef4444;" onclick="closeAgendaDayOptions(); _confirmDeletePlan('${dateStr}')">🗑️ ${esc(T('agenda_remove_plan'))}</button>`
+          : `<button class="primary-btn" style="width:100%; text-align:center; padding:12px;" onclick="closeAgendaDayOptions(); planFromAgenda('${dateStr}')">📅 ${esc(T('agenda_plan_this') || T('agenda_plan_day'))}</button>`
+        }
+        <button class="sec-btn" style="width:100%; text-align:center; padding:12px; background:var(--bg3); border:1px solid var(--border);" onclick="closeAgendaDayOptions(); openExamModal(null, '${dateStr}')">🎓 ${esc(T('agenda_add_exam_here'))}</button>
+      </div>
+    </div>
+  `;
+  modal.classList.add('open');
+}
+
+function closeAgendaDayOptions(){
+  const modal = document.getElementById('agendaDayOptionsOv');
+  if(modal) modal.classList.remove('open');
+}
+
+function _confirmDeletePlan(dateStr) {
+  const msg = S.lang === 'nl' 
+    ? 'Weet je zeker dat je het studieplan voor deze dag wilt verwijderen?' 
+    : (S.lang === 'fr' 
+      ? 'Êtes-vous sûr de vouloir supprimer le plan d’étude pour ce jour?' 
+      : (S.lang === 'es' 
+        ? '¿Estás seguro de que quieres eliminar el plan de estudio para este día?' 
+        : (S.lang === 'ro' 
+          ? 'Sigur dorești să ștergi planul de studiu pentru această zi?' 
+          : 'Are you sure you want to delete the study plan for this day?')));
+  const yes = S.lang === 'nl' ? 'Verwijderen' : (S.lang === 'fr' ? 'Supprimer' : (S.lang === 'es' ? 'Eliminar' : (S.lang === 'ro' ? 'Șterge' : 'Delete')));
+  const no = S.lang === 'nl' ? 'Annuleren' : (S.lang === 'fr' ? 'Annuler' : (S.lang === 'es' ? 'Cancelar' : (S.lang === 'ro' ? 'Anulează' : 'Cancel')));
+  showConfirm('🗑️', T('agenda_remove_plan'), msg, no, yes, () => {
+    if(dateStr === todayStr() || dateStr === studyDayStr()){
+      blocks = [];
+      curBlock = 0;
+      curPhase = 'focus';
+      timeLeft = 0;
+      totalTime = 0;
+      running = false;
+      if(iv){ clearInterval(iv); iv = null; }
+    }
+    deleteDayPlan(dateStr);
+  });
 }
 
 function _agIsoDate(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -1419,7 +1489,7 @@ function deleteDayPlan(dateStr){ delete dayPlans[dateStr]; saveData(); renderAge
 
 /* ---- Exam modal ---- */
 let _editingExamId = null;
-function openExamModal(examId){
+function openExamModal(examId, defaultDate){
   _editingExamId = examId || null;
   const ex = examId ? examDates.find(e => e.id === examId) : null;
   document.getElementById('examModalTitle').textContent = T('exam_add_t');
@@ -1459,7 +1529,7 @@ function openExamModal(examId){
             }).join('');
           })()}
         </div>
-        <input class="bd-subj-input" id="examDateInput" type="date" min="${todayStr()}" value="${ex ? ex.date : todayStr()}">
+        <input class="bd-subj-input" id="examDateInput" type="date" min="${todayStr()}" value="${ex ? ex.date : (defaultDate || todayStr())}">
       </div>
       <div>
         <div class="bd-field-lbl">${T('exam_time')}</div>

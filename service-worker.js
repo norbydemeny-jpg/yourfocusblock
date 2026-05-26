@@ -3,7 +3,7 @@
    Cache-first strategy. Cache version: focusblock-v2.
    ══════════════════════════════════════════════════════ */
 
-const CACHE = 'focusblock-v4';
+const CACHE = 'focusblock-v10';
 
 const PRECACHE = [
   './',

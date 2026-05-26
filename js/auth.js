@@ -164,20 +164,20 @@ function renderAuthModal() {
       <button class="auth-tab"    id="authTabRegister" onclick="switchAuthTab('register')">${_esc(T('auth_register'))}</button>
     </div>
 
-    <div id="authLoginForm" class="auth-form">
+    <form id="authLoginForm" class="auth-form" onsubmit="event.preventDefault(); handleLogin();">
       <input type="email"    id="authEmail"    class="txt-input" placeholder="${_esc(T('auth_email_ph'))}"  autocomplete="email" />
       <input type="password" id="authPassword" class="txt-input" placeholder="${_esc(T('auth_password_ph'))}"   autocomplete="current-password" />
       <div id="authLoginMsg" class="auth-msg"></div>
-      <button class="btn-primary" style="width:100%" onclick="handleLogin()">${_esc(T('auth_login_btn'))}</button>
-    </div>
+      <button type="submit" class="btn-primary" style="width:100%">${_esc(T('auth_login_btn'))}</button>
+    </form>
 
-    <div id="authRegisterForm" class="auth-form" style="display:none">
+    <form id="authRegisterForm" class="auth-form" style="display:none" onsubmit="event.preventDefault(); handleRegister();">
       <input type="text"     id="authUsername"    class="txt-input" placeholder="${_esc(T('auth_username_ph'))}"  autocomplete="username" maxlength="30" />
       <input type="email"    id="authEmailReg"    class="txt-input" placeholder="${_esc(T('auth_email_ph'))}"     autocomplete="email" />
       <input type="password" id="authPasswordReg" class="txt-input" placeholder="${_esc(T('auth_password_new_ph'))}" autocomplete="new-password" />
       <div id="authRegMsg" class="auth-msg"></div>
-      <button class="btn-primary" style="width:100%" onclick="handleRegister()">${_esc(T('auth_register_btn'))}</button>
-    </div>`;
+      <button type="submit" class="btn-primary" style="width:100%">${_esc(T('auth_register_btn'))}</button>
+    </form>`;
 }
 
 // ── Form handlers ───────────────────────────────────────
@@ -250,6 +250,7 @@ function _friendlyError(msg) {
   if (msg.includes('User already registered'))      return T('auth_err_already');
   if (msg.includes('Password should be at least'))  return T('auth_err_minpw');
   if (msg.includes('Unable to validate'))           return T('auth_err_connect');
+  if (msg.includes('rate limit exceeded'))          return T('auth_err_rate_limit') || 'Too many requests. Please try again later.';
   return msg;
 }
 
