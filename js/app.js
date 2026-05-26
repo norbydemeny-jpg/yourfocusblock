@@ -831,6 +831,12 @@ function moveBlock(i, dir){
 
 function addQuickBlock(mins){
   blocks.push({id:nid++, subject:'', mins, note:'', tasks:[], done:false, status:null});
+  // Auto-append a break after long focus blocks (≥45 min) — you need a pause after a long stretch.
+  // Only if the previously last block isn't already a pause (avoid double-pauses on rapid add).
+  if(mins >= 45){
+    const brMins = (S && S.short) ? S.short : 10;
+    blocks.push({id:nid++, isPause:true, mins: brMins, note:'', tasks:[], done:false});
+  }
   checkPauseSuggestion();
   // Sync ring to this block if it's the only/first one and timer isn't running
   if(!running && blocks.length === 1){ timeLeft = mins * 60; totalTime = mins * 60; }

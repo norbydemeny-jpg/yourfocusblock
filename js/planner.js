@@ -820,6 +820,11 @@ function onPlnEndChange(){
 function plnAddFocus(mins){
   if(!D.bb) D.bb = [];
   D.bb.push({subject:'', mins, note:'', note2:'', tasks:[], isPause:false});
+  // Auto-append a break after a long focus block (≥45 min) if the last block isn't already a pause
+  if(mins >= 45){
+    const brMins = (S && S.short) ? S.short : 10;
+    D.bb.push({subject:'__pause__', mins: brMins, note:'', tasks:[], isPause:true});
+  }
   renderPlanner();
 }
 function plnAddPause(mins){

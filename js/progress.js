@@ -151,7 +151,7 @@ async function _fillStatsFriends(){
     } else {
       const order = { studying:0, break:1, online:2 };
       const sorted = [...active].sort((a,b) => (order[a.status] ?? 3) - (order[b.status] ?? 3));
-      activeHost.innerHTML = sorted.slice(0,6).map(f => { const m = _stStatusMeta(f.status); return `<button class="stats-active-row" data-fid="${esc(f.id)}" data-fname="${esc(f.username)}" data-favatar="${esc(f.avatar_url||'')}">${av(f.username, f.avatar_url, 34)}<span class="sar-name">${esc(f.username)}</span><span class="sar-status ${m.cls}"><span class="sar-dot"></span>${esc(m.label)}</span></button>`).join('');
+      activeHost.innerHTML = sorted.slice(0,6).map(f => { const m = _stStatusMeta(f.status); return `<button class="stats-active-row" data-fid="${esc(f.id)}" data-fname="${esc(f.username)}" data-favatar="${esc(f.avatar_url||'')}">${av(f.username, f.avatar_url, 34)}<span class="sar-name">${esc(f.username)}</span><span class="sar-status ${m.cls}"><span class="sar-dot"></span>${esc(m.label)}</span></button>`; }).join('');
       activeHost.querySelectorAll('.stats-active-row').forEach(btn => {
         btn.onclick = () => openFriendStats(btn.dataset.fid, btn.dataset.fname, btn.dataset.favatar);
       });
