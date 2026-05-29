@@ -80,7 +80,19 @@ function studyDayStr(){
 function daysBetween(a, b){ return Math.round((new Date(b) - new Date(a)) / 86400000); }
 function fmt(s){ s = Math.max(0, Math.round(s)); const m = Math.floor(s/60), sec = s%60; return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0'); }
 function fmtClock(d){ return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false}); }
-function fmtDur(m){ m = Math.round(m); const h = Math.floor(m/60), mn = m%60; return mn ? (h ? h+'h '+mn+'m' : mn+'m') : (h ? h+'h' : '0m'); }
+// Geeft duraties in gelokaliseerde vorm: "1u 10min" (NL) / "1h 10min" (overig).
+// Eerder gaf dit "70m" wat verwarrend leest bij langere blokken; nu zie je
+// netjes "1u 10min". Valt veilig terug op "h"/"m" als T() niet beschikbaar is.
+function fmtDur(m){
+  m = Math.round(m);
+  const hUnit  = (typeof T === 'function') ? T('unit_h_short')   : 'h';
+  const mUnit  = (typeof T === 'function') ? T('unit_min_short') : 'min';
+  if(m <= 0) return '0 ' + mUnit;
+  const h = Math.floor(m/60), mn = m%60;
+  if(h && mn) return h + ' ' + hUnit + ' ' + mn + ' ' + mUnit;
+  if(h)        return h + ' ' + hUnit;
+  return mn + ' ' + mUnit;
+}
 function esc(s){ const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 function getCSS(v){ return getComputedStyle(document.body).getPropertyValue(v).trim(); }
 
@@ -113,7 +125,7 @@ en:{
  short_custom:"Custom",hours_short:"h",min_short:"min",short_time_q:"How much <span>time</span> do you have?",short_time_hint:"I'll fit your subjects into focus blocks with breaks.",
  minutes:"minutes",hours:"hours",
  ready_q:"Your <span>plan</span> is ready",
- ready_dur:"Session length",ready_blocks:"Sessions today",ready_total:"Total focus",ready_subj:"Subjects",rec_badge:"Recommended",
+ ready_dur:"Session length",ready_blocks:"Sessions today",ready_pauses:"Breaks",ready_total:"Total focus",ready_subj:"Subjects",rec_badge:"Recommended",
  begin:"Begin session",
  pick_subject:"Pick a subject",custom_subject:"Type your own…",no_subjects:"No subjects yet — add some above.",
  add_task:"+ Add task",task_ph:"Small task…",note_ph:"What exactly will you do?",note_lbl:"Note",
@@ -255,10 +267,13 @@ en:{
  home_social_view:"View friends",home_social_add_t:"Study with friends",home_social_add_d:"Add friends to stay motivated together.",
  home_social_login_d:"Log in to see who's studying and study together.",
  home_social_one:"{name} is focusing right now",home_social_many:"{n} friends are studying now",home_social_none:"No friends studying right now",home_social_offline_n:"{n} offline — your turn to step up",home_social_break:"Friends on a break",home_social_break_sub:"Good time to start yourself.",home_social_be_first:"Be the first — are you focusing today?",
+ afw_studying_too_one:"{name} is focusing too",afw_studying_too_many:"{n} friends focusing",afw_break_one:"1 friend on a break",afw_break_many:"{n} friends on a break",afw_online_one:"1 friend online",afw_online_many:"{n} friends online",afw_be_first:"💪 You're leading the way",afw_focus_one_home:"{name} is focusing",afw_focus_many_home:"{n} friends focusing now",afw_break_home_one:"1 friend on a break",afw_break_home_many:"{n} friends on a break",
  stats_total_focus:"Total focus",stats_weekgoal:"Weekly goal",stats_goal_of:"Goal: {h}h this week",stats_together_week:"Focused together this week",
  stats_top_friends:"Top friends",stats_view_all:"View all",stats_friends_active:"Friends active",stats_view_friends:"View friends",
  stats_per_subject:"Per subject",stats_subject:"Subject",stats_sessions:"Sessions",stats_total_time:"Total time",stats_you:"You",stats_rounded:"Times are rounded to minutes.",stats_login:"Log in to see your friends",
  status_studying:"Focusing",status_break:"On break",status_online:"Online",status_offline:"Offline",
+ unit_h_short:"h",unit_min_short:"min",
+ pq_how_many:"How many?",pq_per_block:"Duration per block",
  agenda_subtitle:"Plan ahead. Stay in control.",agenda_month:"Month",agenda_week:"Week",agenda_week_n:"Week",agenda_today_btn:"Today",
  agenda_upcoming:"Upcoming exams",agenda_no_exams:"No exams scheduled.",
  agenda_sum_planned:"Planned",agenda_sum_focus:"Focus blocks",agenda_sum_pause:"Break blocks",agenda_sum_exams:"Exams",
@@ -309,7 +324,7 @@ TR.nl = {
  short_custom:"Eigen tijd",hours_short:"u",min_short:"min",short_time_q:"Hoeveel <span>tijd</span> heb je?",short_time_hint:"Ik verdeel je vakken over focusblokken met pauzes.",
  minutes:"minuten",hours:"uur",
  ready_q:"Je <span>plan</span> is klaar",
- ready_dur:"Sessieduur",ready_blocks:"Sessies vandaag",ready_total:"Totaal focus",ready_subj:"Vakken",rec_badge:"Aanbevolen",
+ ready_dur:"Sessieduur",ready_blocks:"Sessies vandaag",ready_pauses:"Pauzes",ready_total:"Totaal focus",ready_subj:"Vakken",rec_badge:"Aanbevolen",
  begin:"Sessie starten",
  pick_subject:"Kies een vak",custom_subject:"Typ zelf iets…",no_subjects:"Nog geen vakken — voeg er hierboven toe.",
  add_task:"+ Taak toevoegen",task_ph:"Kleine taak…",note_ph:"Wat ga je precies doen?",note_lbl:"Notitie",
@@ -435,10 +450,13 @@ TR.nl = {
  home_social_view:"Bekijk vrienden",home_social_add_t:"Studeer samen met vrienden",home_social_add_d:"Voeg vrienden toe om samen gemotiveerd te blijven.",
  home_social_login_d:"Log in om te zien wie er studeert en samen te leren.",
  home_social_one:"{name} is nu aan het focussen",home_social_many:"{n} vrienden zijn nu aan het leren",home_social_none:"Niemand aan het leren nu",home_social_offline_n:"{n} offline — jouw moment om er bovenuit te steken",home_social_break:"Vrienden hebben pauze",home_social_break_sub:"Goed moment om zelf te starten.",home_social_be_first:"Wees de eerste — ga jij vandaag focussen?",
+ afw_studying_too_one:"{name} focust ook",afw_studying_too_many:"{n} vrienden zijn aan het focussen",afw_break_one:"1 vriend heeft pauze",afw_break_many:"{n} vrienden hebben pauze",afw_online_one:"1 vriend online",afw_online_many:"{n} vrienden online",afw_be_first:"💪 Jij neemt het voortouw",afw_focus_one_home:"{name} is aan het focussen",afw_focus_many_home:"{n} vrienden zijn nu aan het focussen",afw_break_home_one:"1 vriend heeft pauze",afw_break_home_many:"{n} vrienden hebben pauze",
  stats_total_focus:"Totale focus",stats_weekgoal:"Weekdoel",stats_goal_of:"Doel: {h}u deze week",stats_together_week:"Samen gefocust deze week",
  stats_top_friends:"Top vrienden",stats_view_all:"Alles bekijken",stats_friends_active:"Vrienden actief",stats_view_friends:"Bekijk vrienden",
  stats_per_subject:"Per vak",stats_subject:"Vak",stats_sessions:"Sessies",stats_total_time:"Totale tijd",stats_you:"Jij",stats_rounded:"Tijden worden afgerond op minuten.",stats_login:"Log in om je vrienden te zien",
  status_studying:"Aan het focussen",status_break:"Heeft pauze",status_online:"Online",status_offline:"Offline",
+ unit_h_short:"u",unit_min_short:"min",
+ pq_how_many:"Hoeveel?",pq_per_block:"Duur per blok",
  agenda_subtitle:"Plan vooruit. Blijf in controle.",agenda_month:"Maand",agenda_week:"Week",agenda_week_n:"Week",agenda_today_btn:"Vandaag",
  agenda_upcoming:"Aankomende examens",agenda_no_exams:"Geen examens gepland.",
  agenda_sum_planned:"Gepland",agenda_sum_focus:"Focus blokken",agenda_sum_pause:"Pauzeblokken",agenda_sum_exams:"Examens",
@@ -482,7 +500,7 @@ TR.fr = {
  short_custom:"Personnalisé",hours_short:"h",min_short:"min",short_time_q:"Combien de <span>temps</span> as-tu ?",short_time_hint:"Je répartis tes matières en blocs avec des pauses.",
  minutes:"minutes",hours:"heures",
  ready_q:"Ton <span>plan</span> est prêt",
- ready_dur:"Durée de session",ready_blocks:"Sessions du jour",ready_total:"Focus total",ready_subj:"Matières",rec_badge:"Recommandé",
+ ready_dur:"Durée de session",ready_blocks:"Sessions du jour",ready_pauses:"Pauses",ready_total:"Focus total",ready_subj:"Matières",rec_badge:"Recommandé",
  begin:"Commencer",
  pick_subject:"Choisis une matière",custom_subject:"Tape la tienne…",no_subjects:"Aucune matière — ajoutes-en ci-dessus.",
  add_task:"+ Ajouter une tâche",task_ph:"Petite tâche…",note_ph:"Que vas-tu faire exactement ?",note_lbl:"Note",
@@ -608,10 +626,13 @@ TR.fr = {
  home_social_view:"Voir les amis",home_social_add_t:"Étudie avec tes amis",home_social_add_d:"Ajoute des amis pour rester motivés ensemble.",
  home_social_login_d:"Connecte-toi pour voir qui étudie et travailler ensemble.",
  home_social_one:"{name} est concentré en ce moment",home_social_many:"{n} amis étudient maintenant",home_social_none:"Aucun ami n'étudie en ce moment",home_social_offline_n:"{n} hors ligne — à toi de t'y mettre",home_social_break:"Amis en pause",home_social_break_sub:"Bon moment pour commencer.",home_social_be_first:"Sois le premier — tu te concentres aujourd'hui ?",
+ afw_studying_too_one:"{name} se concentre aussi",afw_studying_too_many:"{n} amis se concentrent",afw_break_one:"1 ami en pause",afw_break_many:"{n} amis en pause",afw_online_one:"1 ami en ligne",afw_online_many:"{n} amis en ligne",afw_be_first:"💪 Tu ouvres la voie",afw_focus_one_home:"{name} se concentre",afw_focus_many_home:"{n} amis se concentrent",afw_break_home_one:"1 ami en pause",afw_break_home_many:"{n} amis en pause",
  stats_total_focus:"Focus total",stats_weekgoal:"Objectif semaine",stats_goal_of:"Objectif : {h}h cette semaine",stats_together_week:"Concentrés ensemble cette semaine",
  stats_top_friends:"Top amis",stats_view_all:"Tout voir",stats_friends_active:"Amis actifs",stats_view_friends:"Voir les amis",
  stats_per_subject:"Par matière",stats_subject:"Matière",stats_sessions:"Sessions",stats_total_time:"Temps total",stats_you:"Toi",stats_rounded:"Les temps sont arrondis aux minutes.",stats_login:"Connecte-toi pour voir tes amis",
  status_studying:"Se concentre",status_break:"En pause",status_online:"En ligne",status_offline:"Hors ligne",
+ unit_h_short:"h",unit_min_short:"min",
+ pq_how_many:"Combien ?",pq_per_block:"Durée par bloc",
  agenda_subtitle:"Planifie à l'avance. Garde le contrôle.",agenda_month:"Mois",agenda_week:"Semaine",agenda_week_n:"Semaine",agenda_today_btn:"Aujourd'hui",
  agenda_upcoming:"Examens à venir",agenda_no_exams:"Aucun examen prévu.",
  agenda_sum_planned:"Planifié",agenda_sum_focus:"Blocs focus",agenda_sum_pause:"Blocs pause",agenda_sum_exams:"Examens",
@@ -655,7 +676,7 @@ TR.es = {
  short_custom:"Personalizado",hours_short:"h",min_short:"min",short_time_q:"¿Cuánto <span>tiempo</span> tienes?",short_time_hint:"Reparto tus materias en bloques con descansos.",
  minutes:"minutos",hours:"horas",
  ready_q:"Tu <span>plan</span> está listo",
- ready_dur:"Duración de sesión",ready_blocks:"Sesiones hoy",ready_total:"Enfoque total",ready_subj:"Materias",rec_badge:"Recomendado",
+ ready_dur:"Duración de sesión",ready_blocks:"Sesiones hoy",ready_pauses:"Pausas",ready_total:"Enfoque total",ready_subj:"Materias",rec_badge:"Recomendado",
  begin:"Comenzar",
  pick_subject:"Elige una materia",custom_subject:"Escribe la tuya…",no_subjects:"Aún no hay materias — añade arriba.",
  add_task:"+ Añadir tarea",task_ph:"Tarea pequeña…",note_ph:"¿Qué harás exactamente?",note_lbl:"Nota",
@@ -781,10 +802,13 @@ TR.es = {
  home_social_view:"Ver amigos",home_social_add_t:"Estudia con amigos",home_social_add_d:"Añade amigos para manteneros motivados juntos.",
  home_social_login_d:"Inicia sesión para ver quién estudia y estudiar juntos.",
  home_social_one:"{name} está concentrado ahora",home_social_many:"{n} amigos están estudiando ahora",home_social_none:"Ningún amigo estudiando ahora",home_social_offline_n:"{n} desconectados — te toca a ti",home_social_break:"Amigos en pausa",home_social_break_sub:"Buen momento para empezar.",home_social_be_first:"Sé el primero — ¿estudias hoy?",
+ afw_studying_too_one:"{name} también se concentra",afw_studying_too_many:"{n} amigos concentrados",afw_break_one:"1 amigo en pausa",afw_break_many:"{n} amigos en pausa",afw_online_one:"1 amigo en línea",afw_online_many:"{n} amigos en línea",afw_be_first:"💪 Tú vas en cabeza",afw_focus_one_home:"{name} se está concentrando",afw_focus_many_home:"{n} amigos se concentran",afw_break_home_one:"1 amigo en pausa",afw_break_home_many:"{n} amigos en pausa",
  stats_total_focus:"Foco total",stats_weekgoal:"Meta semanal",stats_goal_of:"Meta: {h}h esta semana",stats_together_week:"Enfocados juntos esta semana",
  stats_top_friends:"Top amigos",stats_view_all:"Ver todo",stats_friends_active:"Amigos activos",stats_view_friends:"Ver amigos",
  stats_per_subject:"Por materia",stats_subject:"Materia",stats_sessions:"Sesiones",stats_total_time:"Tiempo total",stats_you:"Tú",stats_rounded:"Los tiempos se redondean a minutos.",stats_login:"Inicia sesión para ver a tus amigos",
  status_studying:"Concentrado",status_break:"En pausa",status_online:"En línea",status_offline:"Desconectado",
+ unit_h_short:"h",unit_min_short:"min",
+ pq_how_many:"¿Cuántos?",pq_per_block:"Duración por bloque",
  agenda_subtitle:"Planifica con antelación. Mantén el control.",agenda_month:"Mes",agenda_week:"Semana",agenda_week_n:"Semana",agenda_today_btn:"Hoy",
  agenda_upcoming:"Próximos exámenes",agenda_no_exams:"Sin exámenes programados.",
  agenda_sum_planned:"Planificado",agenda_sum_focus:"Bloques foco",agenda_sum_pause:"Bloques pausa",agenda_sum_exams:"Exámenes",
@@ -828,7 +852,7 @@ TR.ro = {
  short_custom:"Personalizat",hours_short:"h",min_short:"min",short_time_q:"Cât <span>timp</span> ai?",short_time_hint:"Îți împart materiile în blocuri cu pauze.",
  minutes:"minute",hours:"ore",
  ready_q:"<span>Planul</span> tău e gata",
- ready_dur:"Durata sesiunii",ready_blocks:"Sesiuni azi",ready_total:"Focus total",ready_subj:"Materii",rec_badge:"Recomandat",
+ ready_dur:"Durata sesiunii",ready_blocks:"Sesiuni azi",ready_pauses:"Pauze",ready_total:"Focus total",ready_subj:"Materii",rec_badge:"Recomandat",
  begin:"Începe",
  pick_subject:"Alege o materie",custom_subject:"Scrie a ta…",no_subjects:"Încă nicio materie — adaugă mai sus.",
  add_task:"+ Adaugă sarcină",task_ph:"Sarcină mică…",note_ph:"Ce vei face exact?",note_lbl:"Notă",
@@ -954,10 +978,13 @@ TR.ro = {
  home_social_view:"Vezi prietenii",home_social_add_t:"Învață cu prietenii",home_social_add_d:"Adaugă prieteni ca să rămâneți motivați împreună.",
  home_social_login_d:"Conectează-te ca să vezi cine învață și să învățați împreună.",
  home_social_one:"{name} se concentrează acum",home_social_many:"{n} prieteni învață acum",home_social_none:"Niciun prieten nu învață acum",home_social_offline_n:"{n} offline — e rândul tău",home_social_break:"Prieteni în pauză",home_social_break_sub:"Moment bun să începi.",home_social_be_first:"Fii primul — înveți astăzi?",
+ afw_studying_too_one:"{name} se concentrează și el",afw_studying_too_many:"{n} prieteni se concentrează",afw_break_one:"1 prieten în pauză",afw_break_many:"{n} prieteni în pauză",afw_online_one:"1 prieten online",afw_online_many:"{n} prieteni online",afw_be_first:"💪 Tu deschizi drumul",afw_focus_one_home:"{name} se concentrează",afw_focus_many_home:"{n} prieteni se concentrează",afw_break_home_one:"1 prieten în pauză",afw_break_home_many:"{n} prieteni în pauză",
  stats_total_focus:"Focus total",stats_weekgoal:"Obiectiv săptămânal",stats_goal_of:"Obiectiv: {h}h săptămâna asta",stats_together_week:"Concentrați împreună săptămâna asta",
  stats_top_friends:"Top prieteni",stats_view_all:"Vezi tot",stats_friends_active:"Prieteni activi",stats_view_friends:"Vezi prietenii",
  stats_per_subject:"Pe materie",stats_subject:"Materie",stats_sessions:"Sesiuni",stats_total_time:"Timp total",stats_you:"Tu",stats_rounded:"Timpii sunt rotunjiți la minute.",stats_login:"Conectează-te ca să vezi prietenii",
  status_studying:"Se concentrează",status_break:"În pauză",status_online:"Online",status_offline:"Offline",
+ unit_h_short:"h",unit_min_short:"min",
+ pq_how_many:"Câte?",pq_per_block:"Durata per bloc",
  agenda_subtitle:"Planifică din timp. Păstrează controlul.",agenda_month:"Lună",agenda_week:"Săptămână",agenda_week_n:"Săptămâna",agenda_today_btn:"Astăzi",
  agenda_upcoming:"Examene viitoare",agenda_no_exams:"Niciun examen programat.",
  agenda_sum_planned:"Planificat",agenda_sum_focus:"Blocuri focus",agenda_sum_pause:"Blocuri pauză",agenda_sum_exams:"Examene",

@@ -98,12 +98,23 @@ function _buildFriendList() {
 function _av(f, size){ return (typeof window.fbAvatarHTML === 'function') ? window.fbAvatarHTML(f.username, f.avatar_url, size||28) : `<div class="afw-avatar">${(f.username||'?')[0].toUpperCase()}</div>`; }
 
 // ── Actieve-vrienden widget — homepage + app ───────────
+//   Geen hardcoded NL strings meer: alle labels via Tf()/T() zodat ze in
+//   alle 5 talen kloppen (EN/NL/FR/ES/RO).
 function renderWidget(friends) {
   // Studying / break = "active right now"; online = "available"
   const studying = friends.filter(f => f.status === 'studying');
   const onBreak  = friends.filter(f => f.status === 'break');
   const online   = friends.filter(f => f.status === 'online');
   const active   = [...studying, ...onBreak, ...online];
+
+  const tfSafe = (key, vars, fallback) => {
+    if (typeof Tf === 'function') {
+      const out = Tf(key, vars || {});
+      if (out && out !== key) return out;
+    }
+    return fallback;
+  };
+  const tSafe = (key, fallback) => (typeof T === 'function' ? (T(key) || fallback) : fallback);
 
   const avBtn = (f, size) => {
     const sz = size || 30;
@@ -118,11 +129,16 @@ function renderWidget(friends) {
       widget.style.display = 'none';
       widget.innerHTML = '';
     } else {
-      const label = studying.length === 1
-        ? `<strong>${_esc(studying[0].username)}</strong> is aan het focussen`
-        : studying.length > 1
-        ? `<strong>${studying.length} vrienden</strong> zijn nu aan het focussen`
-        : `<strong>${onBreak.length}</strong> ${onBreak.length === 1 ? 'vriend heeft' : 'vrienden hebben'} pauze`;
+      let label;
+      if (studying.length === 1) {
+        label = tfSafe('afw_focus_one_home', { name: _esc(studying[0].username) }, `${_esc(studying[0].username)} is focusing`);
+      } else if (studying.length > 1) {
+        label = tfSafe('afw_focus_many_home', { n: studying.length }, `${studying.length} friends focusing`);
+      } else {
+        label = onBreak.length === 1
+          ? tSafe('afw_break_home_one', '1 friend on a break')
+          : tfSafe('afw_break_home_many', { n: onBreak.length }, `${onBreak.length} friends on a break`);
+      }
       widget.style.display = 'block';
       widget.innerHTML = `
         <div class="afw-inner">
@@ -145,19 +161,26 @@ function renderWidget(friends) {
       if (friends.length > 0) {
         appWidget.innerHTML = `
           <div class="afw-prominent-empty">
-            <span>💪 Jij bent als eerste begonnen</span>
+            <span>${tSafe('afw_be_first', '💪 You\'re leading the way')}</span>
           </div>`;
       } else {
         appWidget.innerHTML = '';
       }
     } else {
-      const label = studying.length > 0
-        ? (studying.length === 1
-            ? `${_esc(studying[0].username)} leert ook`
-            : `${studying.length} vrienden leren`)
-        : (onBreak.length > 0
-            ? `${onBreak.length} ${onBreak.length === 1 ? 'vriend heeft pauze' : 'vrienden hebben pauze'}`
-            : `${online.length} ${online.length === 1 ? 'vriend online' : 'vrienden online'}`);
+      let label;
+      if (studying.length > 0) {
+        label = studying.length === 1
+          ? tfSafe('afw_studying_too_one', { name: _esc(studying[0].username) }, `${_esc(studying[0].username)} is focusing too`)
+          : tfSafe('afw_studying_too_many', { n: studying.length }, `${studying.length} friends focusing`);
+      } else if (onBreak.length > 0) {
+        label = onBreak.length === 1
+          ? tSafe('afw_break_one', '1 friend on a break')
+          : tfSafe('afw_break_many', { n: onBreak.length }, `${onBreak.length} friends on a break`);
+      } else {
+        label = online.length === 1
+          ? tSafe('afw_online_one', '1 friend online')
+          : tfSafe('afw_online_many', { n: online.length }, `${online.length} friends online`);
+      }
       appWidget.innerHTML = `
         <div class="afw-prominent-bar">
           <span class="afw-dot${studying.length ? '' : ' afw-dot-quiet'}"></span>

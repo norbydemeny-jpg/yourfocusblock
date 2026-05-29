@@ -182,13 +182,14 @@ function renderStepCount(host){
       const eh = Math.floor(endMins/60)%24, em = endMins%60;
       endStr = ` · ${T('ready_at')} <strong>${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}</strong>`;
     } else {
+      // Geen startTime gekozen → reken vanaf NU (echte tijd, geen +10 buffer).
       const now = new Date();
-      const startMins = Math.ceil((now.getHours()*60 + now.getMinutes() + 10) / 10) * 10;
+      const startMins = now.getHours()*60 + now.getMinutes();
       const endMins = startMins + focusMins + breakMins;
       const eh = Math.floor(endMins/60)%24, em = endMins%60;
-      endStr = ` · ${T('ready_approx')}<strong>${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}</strong>`;
+      endStr = ` · ${T('ready_at')} <strong>${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}</strong>`;
     }
-    document.getElementById('cntInfo').innerHTML = `<strong>${D.count}</strong> × ${d.min} min · ${fmtDur(focusMins)}${endStr}`;
+    document.getElementById('cntInfo').innerHTML = `<strong>${D.count}</strong> × ${fmtDur(d.min)} · ${fmtDur(focusMins)}${endStr}`;
   };
   document.getElementById('cntMinus').onclick = () => { D.count = Math.max(1, D.count-1); upd(); };
   document.getElementById('cntPlus').onclick = () => { D.count = Math.min(12, D.count+1); upd(); };
@@ -231,11 +232,13 @@ function buildAssignDrafts(){
 function renderStepAssign(host){
   buildAssignDrafts();
   if(!D.startTime){
+    // Default = NU, niet "afgerond naar volgend 10-min hokje + 10 buffer".
+    // Anders ziet de gebruiker bij 12:09 een starttijd van 12:20 — verwarrend
+    // en niet "in real-time" zoals verwacht. Gebruiker kan nog wel handmatig
+    // aanpassen via het time-inputveld.
     const now = new Date();
-    const totalMins = now.getHours()*60 + now.getMinutes() + 10;
-    const rounded = Math.ceil(totalMins / 10) * 10;
-    const h = Math.floor(rounded/60) % 24;
-    const m = rounded % 60;
+    const h = now.getHours();
+    const m = now.getMinutes();
     D.startTime = String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
   }
   host.innerHTML = fstepHTML(T('assign_q'), T('assign_hint'),
@@ -572,14 +575,23 @@ function renderStepReady(host, isOnb){
   }
   const d = durs[D.durIdx] || durs.find(x => x.rec);
   focusMin = d.min; brkMin = (D._shortBrk || d.brk); longMin = S.long;
-  count = D.bb.length;
-  totalFocus = D.bb.reduce((a,b) => a + (b.mins || focusMin), 0);
-  const usedSubs = [...new Set(D.bb.map(b => b.subject).filter(Boolean))];
+  // Tel alleen focus-blokken voor "sessies" — pauzes apart, anders zegt de
+  // samenvatting "5 sessies" terwijl de gebruiker maar 3 vakken plande.
+  const focusBlocks = D.bb.filter(b => !b.isPause);
+  const pauseBlocks = D.bb.filter(b =>  b.isPause);
+  count = focusBlocks.length;
+  totalFocus = focusBlocks.reduce((a,b) => a + (b.mins || focusMin), 0);
+  const totalPause = pauseBlocks.reduce((a,b) => a + (b.mins || brkMin), 0);
+  const usedSubs = [...new Set(focusBlocks.map(b => b.subject).filter(Boolean))];
   subjList = usedSubs.length ? usedSubs.join(' · ') : '—';
+  const pauseRow = pauseBlocks.length
+    ? `<div class="rc-row"><div class="rc-ico">⏸</div><div><div class="rc-lbl">${esc(T('ready_pauses') || 'Pauzes')}</div><div class="rc-val">${pauseBlocks.length} · ${fmtDur(totalPause)}</div></div></div>`
+    : '';
   host.innerHTML = fstepHTML(T('ready_q'), '',
     `<div class="ready-card">
       <div class="rc-row"><div class="rc-ico">◷</div><div><div class="rc-lbl">${esc(T('ready_dur'))}</div><div class="rc-val">${focusMin} / ${brkMin} min</div></div></div>
       <div class="rc-row"><div class="rc-ico">▦</div><div><div class="rc-lbl">${esc(T('ready_blocks'))}</div><div class="rc-val">${count}</div></div></div>
+      ${pauseRow}
       <div class="rc-row"><div class="rc-ico">∑</div><div><div class="rc-lbl">${esc(T('ready_total'))}</div><div class="rc-val">${fmtDur(totalFocus)}</div></div></div>
       <div class="rc-row"><div class="rc-ico">≡</div><div><div class="rc-lbl">${esc(T('ready_subj'))}</div><div class="rc-val">${esc(subjList)}</div></div></div>
     </div>`,
@@ -642,10 +654,12 @@ function initDay(){
    ══════════════════════════════════════════════════════ */
 
 function padT(h, m){ return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'); }
+// Echte huidige tijd (geen rounding/buffer). Eerder rondde dit op naar de
+// volgende 5-min-grens met +1 buffer — daardoor stond een blok in plan-dag
+// niet bij de echte starttijd. Gebruiker wil "real-time tijd van nu".
 function nowRounded5(){
   const now = new Date();
-  const rounded = Math.ceil((now.getHours()*60 + now.getMinutes() + 1) / 5) * 5;
-  return padT(Math.floor(rounded/60) % 24, rounded % 60);
+  return padT(now.getHours(), now.getMinutes());
 }
 
 function goPlanner(mode){
@@ -723,7 +737,14 @@ function renderPlanner(){
   document.getElementById('pqF50').textContent = T('dpl_add_focus_50');
   document.getElementById('pqP5').textContent  = T('dpl_add_pause_5');
   document.getElementById('pqP15').textContent = T('dpl_add_pause_15');
-  document.getElementById('pqCustom').textContent = T('dpl_add_custom');
+  // Multi-add picker: aantal × duur in 1 klik N blokken — vervangt slider
+  // (die was te traag van 1u naar 2u en kon maar 1 blok tegelijk toevoegen).
+  const howLbl = document.getElementById('pqMultiHow');
+  if(howLbl) howLbl.textContent = T('pq_how_many') || 'Hoeveel?';
+  const durLbl = document.getElementById('pqMultiDur');
+  if(durLbl) durLbl.textContent = T('pq_per_block') || 'Duur per blok';
+  _plnRenderPqPills();
+  _plnUpdatePqLabels();
   document.getElementById('plnStartBtn').textContent = T('dpl_start_btn');
 
   // Start time input — always synced
@@ -771,13 +792,17 @@ function renderPlanner(){
       const tasksTotal = (b.tasks || []).filter(tk => tk.text).length;
       const subjColor = !isPause && b.subject ? colorFor(b.subject) : null;
 
-      // Subject chips for focus blocks (inline quick-pick)
+      // Subject chips for focus blocks (inline quick-pick) + "+ Vak" chip
+      // zodat de gebruiker een nieuw vak kan toevoegen zonder eerst het
+      // block-detail modal te hoeven openen.
       let inlineSubjHtml = '';
-      if(!isPause && subjects.length){
+      if(!isPause){
         const chipHtml = subjects.slice(0,4).map(s =>
           `<button class="pln-subj-chip${b.subject === s.name ? ' active' : ''}" onclick="event.stopPropagation();plnSetSubj(${i},'${s.name.replace(/'/g,"\\'")}');return false;" style="${b.subject === s.name ? 'border-color:' + colorFor(s.name) + ';color:' + colorFor(s.name) : ''}">${esc(s.name)}</button>`
         ).join('');
-        inlineSubjHtml = `<div class="pln-subj-row">${chipHtml}</div>`;
+        const addLbl = (typeof T === 'function' ? T('add_subj_btn') : '+ Vak');
+        const addChip = `<button class="pln-subj-chip pln-subj-add" onclick="event.stopPropagation();plnOpenAddSubject(${i});return false;" title="${esc(addLbl)}">${esc(addLbl)}</button>`;
+        inlineSubjHtml = `<div class="pln-subj-row">${chipHtml}${addChip}</div>`;
       }
 
       row.innerHTML = `
@@ -828,6 +853,18 @@ function plnSetSubj(idx, name){
   renderPlanner();
 }
 
+// Open de block-detail modal en focus meteen op het vak-input zodat de
+// gebruiker direct een nieuw vak kan typen (en niet eerst hoeft te zoeken
+// waar het kan).
+function plnOpenAddSubject(idx){
+  openBlockDetail(idx);
+  setTimeout(() => {
+    const inp = document.getElementById('bdSubjInput');
+    if(inp){ inp.value = ''; inp.focus(); }
+  }, 60);
+}
+window.plnOpenAddSubject = plnOpenAddSubject;
+
 function plnChangeDur(idx, delta){
   const b = D.bb[idx]; if(!b) return;
   b.mins = Math.max(5, Math.min(240, (b.mins || 25) + delta));
@@ -862,10 +899,70 @@ function plnAddPause(mins){
   D.bb.push({subject:'__pause__', mins, note:'', tasks:[], isPause:true});
   renderPlanner();
 }
-function plnAddCustom(){
-  const m = parseInt(prompt(T('dpl_duration') + ' (min):', '30'), 10);
-  if(m > 0 && m <= 240){ plnAddFocus(Math.min(m, 240)); }
+
+/* ---- Multi-add: kies aantal × duur, voeg in 1 klik N blokken toe ---- */
+const _PQ_COUNTS = [1, 2, 3, 4, 5, 6, 8, 10];
+const _PQ_DURS   = [15, 25, 30, 45, 50, 60, 75, 90, 120];
+let _pqCount = 2;
+let _pqDur   = 25;
+
+function plnSetPqCount(n){
+  _pqCount = Math.max(1, Math.min(20, +n || 1));
+  _plnRenderPqPills();
+  _plnUpdatePqLabels();
 }
+function plnSetPqDur(m){
+  _pqDur = Math.max(5, Math.min(240, +m || 25));
+  _plnRenderPqPills();
+  _plnUpdatePqLabels();
+}
+function _plnRenderPqPills(){
+  const cHost = document.getElementById('pqCountPills');
+  if(cHost){
+    cHost.innerHTML = _PQ_COUNTS.map(n =>
+      `<button type="button" class="pq-pill ${n === _pqCount ? 'on' : ''}" onclick="plnSetPqCount(${n})">${n}×</button>`
+    ).join('');
+  }
+  const dHost = document.getElementById('pqDurPills');
+  if(dHost){
+    dHost.innerHTML = _PQ_DURS.map(m =>
+      `<button type="button" class="pq-pill ${m === _pqDur ? 'on' : ''}" onclick="plnSetPqDur(${m})">${fmtDur(m)}</button>`
+    ).join('');
+  }
+}
+function _plnUpdatePqLabels(){
+  // Action knoppen reflecteren huidige keuze. "+ 3 × 50 min Focus"
+  const sum = `${_pqCount}× ${fmtDur(_pqDur)}`;
+  const focusLbl = (typeof T === 'function' ? T('phase_focus') : 'Focus');
+  const pauseLbl = (typeof T === 'function' ? T('phase_short') : 'Pauze');
+  const fBtn = document.getElementById('pqMultiFocus');
+  if(fBtn) fBtn.innerHTML = `＋ ${esc(sum)} ${esc(focusLbl)}`;
+  const pBtn = document.getElementById('pqMultiPause');
+  if(pBtn) pBtn.innerHTML = `＋ ${esc(sum)} ${esc(pauseLbl)}`;
+}
+function plnAddMulti(kind){
+  if(!D.bb) D.bb = [];
+  const n = _pqCount || 1;
+  const m = _pqDur || 25;
+  for(let i = 0; i < n; i++){
+    if(kind === 'pause'){
+      D.bb.push({subject:'__pause__', mins:m, note:'', tasks:[], isPause:true});
+    } else {
+      D.bb.push({subject:'', mins:m, note:'', note2:'', tasks:[], isPause:false});
+      // Voeg automatische pauze tussen lange focus-blokken (≥45 min), behalve
+      // na de laatste — anders krijg je een dubbele pauze als de gebruiker
+      // daarna nog "+ Pauze" klikt.
+      if(m >= 45 && i < n - 1){
+        const brMins = (S && S.short) ? S.short : 10;
+        D.bb.push({subject:'__pause__', mins:brMins, note:'', tasks:[], isPause:true});
+      }
+    }
+  }
+  renderPlanner();
+}
+window.plnSetPqCount = plnSetPqCount;
+window.plnSetPqDur   = plnSetPqDur;
+window.plnAddMulti   = plnAddMulti;
 
 /* ---- Duplicate day ---- */
 function duplicatePlan(){
@@ -898,13 +995,13 @@ function openBlockDetail(idx){
       </div>
     </div>`;
 
-  // Duration stepper
+  // Duration stepper — gebruik fmtDur zodat "70 min" → "1u 10min" leest.
   const durRow = `
     <div class="bd-dur-row">
       <div class="bd-dur-lbl">${T('dpl_duration')}</div>
       <div class="bd-dur-ctrl">
         <button class="bd-dur-minus" onclick="bdChangeDur(-5)">−</button>
-        <div class="bd-dur-val" id="bdDurVal">${b.mins} min</div>
+        <div class="bd-dur-val" id="bdDurVal">${fmtDur(b.mins)}</div>
         <button class="bd-dur-plus" onclick="bdChangeDur(5)">+</button>
       </div>
     </div>`;
@@ -979,7 +1076,7 @@ function bdChangeDur(delta){
   const b = D.bb[_editingBlockIdx]; if(!b) return;
   b.mins = Math.max(5, Math.min(240, (b.mins || 25) + delta));
   const v = document.getElementById('bdDurVal');
-  if(v) v.textContent = b.mins + ' min';
+  if(v) v.textContent = fmtDur(b.mins);
 }
 
 function bdPickSubj(name){

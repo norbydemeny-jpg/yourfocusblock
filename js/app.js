@@ -79,6 +79,9 @@ function applyAnimLevel(){
 function applyLang(){
   document.documentElement.lang = S.lang;
   renderNavLabels();
+  // Refresh auth-area (login button / account chip tooltip) zodat het meteen
+  // de nieuwe taal toont.
+  if(typeof window.fbRefreshAuthUI === 'function') window.fbRefreshAuthUI();
   // Only re-render screens that are actually shown. Screens hide via the
   // `out` class (inline style.display stays ""), so check the class — not
   // style.display — to avoid rendering uninitialised screens during init.

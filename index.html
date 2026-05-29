@@ -173,7 +173,20 @@
         <button class="pq-btn focus" onclick="plnAddFocus(50)" id="pqF50">50 min focus</button>
         <button class="pq-btn pause" onclick="plnAddPause(5)" id="pqP5">5 min break</button>
         <button class="pq-btn pause" onclick="plnAddPause(15)" id="pqP15">15 min break</button>
-        <button class="pq-btn custom" onclick="plnAddCustom()" id="pqCustom">Custom</button>
+      </div>
+      <div class="pq-multi" id="pqMulti">
+        <div class="pq-multi-block">
+          <div class="pq-multi-lbl" id="pqMultiHow">Hoeveel?</div>
+          <div class="pq-multi-pills" id="pqCountPills"></div>
+        </div>
+        <div class="pq-multi-block">
+          <div class="pq-multi-lbl" id="pqMultiDur">Duur per blok</div>
+          <div class="pq-multi-pills" id="pqDurPills"></div>
+        </div>
+        <div class="pq-multi-actions">
+          <button class="pq-multi-add focus" onclick="plnAddMulti('focus')" id="pqMultiFocus">＋ Voeg toe</button>
+          <button class="pq-multi-add pause" onclick="plnAddMulti('pause')" id="pqMultiPause">＋ Pauze</button>
+        </div>
       </div>
     </div>
     <div class="planner-body" id="plannerBlocks"></div>

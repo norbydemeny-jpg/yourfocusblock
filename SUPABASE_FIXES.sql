@@ -67,6 +67,15 @@ create policy "friendships_delete_involved"
 -- ─── 3) USER_STATUS ─────────────────────────────────────────────────
 --  Iedereen ingelogd mag statussen lezen (voor het "vrienden aan het
 --  studeren" widget). Eigen rij upserten.
+--
+--  Tabel-aanmaak veilig als deze nog niet bestaat. Veld 'status' is een
+--  vrije text-kolom ('studying' | 'break' | 'online' | 'offline').
+
+create table if not exists public.user_status (
+  user_id    uuid primary key references auth.users(id) on delete cascade,
+  status     text not null default 'offline',
+  updated_at timestamptz not null default now()
+);
 
 alter table public.user_status enable row level security;
 
@@ -184,4 +193,34 @@ end $$;
 --     ✓ Friend-stats popup laat per-vak data zien
 --     ✓ Leaderboard toont alle vrienden + hun minuten
 --     ✓ Oude users kunnen inloggen
+-- ════════════════════════════════════════════════════════════════════
+
+
+-- ─── 8) VERIFICATIE — draai dit om te checken of alles klopt ────────
+--  Plak de query's hieronder los om te zien wat er staat.
+
+-- 8a. Bestaan de tabellen?
+-- select table_name from information_schema.tables
+--  where table_schema = 'public'
+--    and table_name in ('profiles','friendships','user_status','study_sessions','referrals')
+--  order by table_name;
+-- Moet 5 rijen geven.
+
+-- 8b. Welke policies staan er per tabel?
+-- select tablename, policyname, cmd
+--   from pg_policies
+--  where schemaname = 'public'
+--    and tablename in ('profiles','friendships','user_status','study_sessions','referrals')
+--  order by tablename, policyname;
+-- Verwacht: per tabel meerdere policies — minstens een _select_* en _insert_*.
+
+-- 8c. Staat user_status + friendships in de realtime publicatie?
+-- select tablename from pg_publication_tables
+--  where pubname = 'supabase_realtime'
+--    and tablename in ('user_status','friendships');
+-- Moet 2 rijen geven.
+
+-- 8d. Zit jouw eigen account erin?
+-- select id, username, referral_code from public.profiles
+--  where id = (select id from auth.users where email = 'info@quickcarb.be' limit 1);
 -- ════════════════════════════════════════════════════════════════════

@@ -246,14 +246,29 @@ async function handleLogin() {
     showAuthMsg('authLoginMsg', T('auth_fill_email_pw')); return;
   }
   const btn = document.querySelector('#authLoginForm button[type="submit"]');
+  // Safety: re-enable button + close modal after 15s no matter what, so the
+  // modal never stays stuck on "Bezig…" if the network hangs.
+  let safetyT = setTimeout(() => {
+    if (btn) btn.disabled = false;
+    // If a session arrived in the meantime, close. Otherwise show timeout msg.
+    if (_currentUser) {
+      closeAuthModal();
+      toast(T('auth_welcome_back'));
+    } else {
+      showAuthMsg('authLoginMsg', T('auth_err_connect') || 'Geen verbinding met de server.');
+    }
+    safetyT = null;
+  }, 15000);
   try {
     if (btn) btn.disabled = true;
     showAuthMsg('authLoginMsg', T('auth_busy'), false);
     await login(email, password);
+    if (safetyT) { clearTimeout(safetyT); safetyT = null; }
     closeAuthModal();
     if (btn) btn.disabled = false;
     toast(T('auth_welcome_back'));
   } catch (e) {
+    if (safetyT) { clearTimeout(safetyT); safetyT = null; }
     if (btn) btn.disabled = false;
     const raw = e?.message || '';
     // Account bestond al vóór email-confirmation uit stond → toon resend-link
@@ -349,19 +364,33 @@ function _friendlyError(msg) {
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ── Profiel laden / cachen ─────────────────────────────
+//   Belangrijk: bij een mislukte query NOOIT _myProfile naar lege username
+//   resetten — anders verdwijnt de avatar-chip rechtsboven. Houd de vorige
+//   waarde aan, of val terug op de e-mail-prefix.
 async function loadMyProfile(userId){
+  const _emailFallback = () => ({
+    id: userId,
+    username: (_currentUser?.email || 'user').split('@')[0],
+    avatar_url: ''
+  });
+  const _keepOrFallback = () => {
+    if (_myProfile && _myProfile.id === userId && _myProfile.username) return _myProfile;
+    return _emailFallback();
+  };
+
   try {
     // Attempt to select app_state if the column has been added by the user in Supabase
     const queryPromise = supabase.from('profiles').select('id, username, avatar_url, app_state').eq('id', userId).single();
-    const res = await _withTimeout(queryPromise, 4000, { data: null });
+    const res = await _withTimeout(queryPromise, 6000, { data: null, error: { message: 'timeout' } });
     const data = res?.data;
-    
+    const err  = res?.error;
+
     // Apply cloud progression if it exists and is newer than local storage
     if (data && data.app_state && typeof window.applyLoaded === 'function') {
       const localData = typeof window.loadLocal === 'function' ? window.loadLocal() : null;
       const cloudTs = data.app_state._ts || 0;
       const localTs = localData ? (localData._ts || 0) : -1;
-      
+
       if (cloudTs > localTs) {
         // Merge the cloud stats with local UI settings so we don't overwrite user theme preferences
         const mergedData = Object.assign({}, localData || {}, data.app_state);
@@ -371,16 +400,28 @@ async function loadMyProfile(userId){
         if (typeof window.updateStreakUI === 'function') window.updateStreakUI();
       }
     }
-    
-    _myProfile = data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
-  } catch (e) {
-    // Fallback if app_state column doesn't exist yet (PostgREST error)
-    try {
-      const fallback = await supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single();
-      _myProfile = fallback.data || { id: userId, username: (_currentUser?.email || 'user').split('@')[0], avatar_url: '' };
-    } catch {
-      _myProfile = { id: userId, username: '', avatar_url: '' };
+
+    if (data) {
+      _myProfile = data;
+    } else if (err && /app_state|column .* does not exist|schema cache/i.test(err.message || '')) {
+      // app_state column missing — try basic profile fields only.
+      try {
+        const fallback = await _withTimeout(
+          supabase.from('profiles').select('id, username, avatar_url').eq('id', userId).single(),
+          6000,
+          { data: null }
+        );
+        _myProfile = fallback?.data || _keepOrFallback();
+      } catch {
+        _myProfile = _keepOrFallback();
+      }
+    } else {
+      // Timeout or network glitch: keep previous profile if we have one.
+      _myProfile = _keepOrFallback();
     }
+  } catch (e) {
+    console.warn('[Auth] loadMyProfile error:', e?.message || e);
+    _myProfile = _keepOrFallback();
   }
   return _myProfile;
 }
@@ -441,54 +482,71 @@ async function updateMyProfile(fields){
 }
 window.updateMyProfile = updateMyProfile;
 window.fbRefreshProfile = async () => { if (_currentUser){ await loadMyProfile(_currentUser.id); renderAuthChip(); } };
+// Aanroep door app.js applyLang() bij taalwissel zodat de "Inloggen"-knop
+// (of de chip-tooltip) meteen in de nieuwe taal verschijnt zonder reload.
+window.fbRefreshAuthUI = () => { updateAuthUI(_currentUser); };
 
 // ── Auth state listener helper ──────────────────────────
-function handleAuthStateChange(event, session) {
-  const user = session?.user ?? null;
+//   We luisteren naar één bron: supabase.auth.onAuthStateChange. Dat event
+//   vuurt INITIAL_SESSION direct bij registratie (Supabase v2-gedrag) zodat
+//   we geen aparte handmatige getSession()-aanroep nodig hebben — dat
+//   veroorzaakte een race waarbij de UI eerst "uitgelogd" toonde, en pas
+//   daarna de avatar verscheen.
+let _authInitialized = false;
+let _lastHandledUserId = null;
 
-  (async () => {
-    if (event === 'SIGNED_IN' && user) {
-      await ensureProfile(user);
+async function handleAuthStateChange(event, session) {
+  const user = session?.user ?? null;
+  try {
+    if (event === 'SIGNED_OUT' || !user) {
+      _lastHandledUserId = null;
+      await updateAuthUI(null);
+      return;
     }
+
+    // SIGNED_IN of INITIAL_SESSION: profiel garanderen en UI updaten.
+    if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+      try { await ensureProfile(user); } catch (e) { console.warn('[Auth] ensureProfile:', e?.message || e); }
+      _lastHandledUserId = user.id;
+      await updateAuthUI(user);
+      return;
+    }
+
+    // TOKEN_REFRESHED: NIET het profiel herladen — daardoor verdween de
+    // avatar bij elke token-refresh. Alleen _currentUser bijwerken.
+    if (event === 'TOKEN_REFRESHED') {
+      _currentUser = user;
+      // Als we (door eerder falen) nog geen profiel hebben, alsnog ophalen.
+      if (!_myProfile || _myProfile.id !== user.id || !_myProfile.username) {
+        await updateAuthUI(user);
+      }
+      return;
+    }
+
+    // USER_UPDATED of andere: veilig vol-updaten zonder ensureProfile.
     await updateAuthUI(user);
-  })();
+  } catch (e) {
+    console.error('[Auth] state change error:', e?.message || e);
+  } finally {
+    if (!_authInitialized) {
+      _authInitialized = true;
+      resolveAuthReady();
+    }
+  }
 }
 
-// ── Init: herstel bestaande sessie bij pagina laden ─────
-(async () => {
-  try {
-    const { data: { session } } = await _withTimeout(
-      supabase.auth.getSession(),
-      4000,
-      { data: { session: null } }
-    );
-    if (session?.user) {
-      // Wrap in a timeout to guarantee resolving fbAuthReady even if db queries hang
-      await Promise.race([
-        (async () => {
-          await ensureProfile(session.user);
-          await updateAuthUI(session.user);
-        })(),
-        new Promise(res => setTimeout(() => {
-          console.warn('[Auth] Profile loading timed out on init');
-          _currentUser = session.user;
-          _myProfile = { id: session.user.id, username: (session.user.email || 'user').split('@')[0], avatar_url: '' };
-          renderAuthChip();
-          res();
-        }, 4000))
-      ]);
-    } else {
-      await updateAuthUI(null);
-    }
-  } catch (e) {
-    console.error('[Auth] Init error:', e);
-    await updateAuthUI(null);
-  } finally {
-    resolveAuthReady();
-    // Register the listener for all subsequent auth events
-    supabase.auth.onAuthStateChange(handleAuthStateChange);
-  }
-})();
+// Registreer de listener METEEN — geen race met handmatige init.
+supabase.auth.onAuthStateChange(handleAuthStateChange);
+
+// Safety net: als INITIAL_SESSION om wat voor reden ook nooit binnenkomt,
+// resolve fbAuthReady alsnog na 6s zodat sessions.js/friends.js/status.js
+// niet eeuwig blijven wachten op auth.
+setTimeout(() => {
+  if (_authInitialized) return;
+  _authInitialized = true;
+  console.warn('[Auth] No INITIAL_SESSION within 6s — assuming logged out');
+  updateAuthUI(null).finally(() => resolveAuthReady());
+}, 6000);
 
 // ── Expose aan window (voor onclick in HTML) ────────────
 window.openAuthModal   = openAuthModal;

@@ -28,7 +28,9 @@ function getCurrentUserId() {
 
 async function _refreshFriendsCacheSilent(){
   try {
-    const [friends, requests] = await Promise.all([getFriends(), getIncomingRequests()]);
+    const settled = await Promise.allSettled([getFriends(), getIncomingRequests()]);
+    const friends  = settled[0].status === 'fulfilled' ? settled[0].value : (_friendsCache?.friends || []);
+    const requests = settled[1].status === 'fulfilled' ? settled[1].value : (_friendsCache?.requests || []);
     _friendsCache = { friends, requests, ts: Date.now() };
     // Re-render als modal open is.
     if (document.getElementById('friendsOv')?.classList.contains('open')) {
@@ -231,11 +233,17 @@ async function renderFriendsModal(isSilentRefresh = false) {
       requests = _friendsCache.requests;
       if (!isSilentRefresh) _refreshFriendsCacheSilent();
     } else {
-      [friends, requests] = await _withTimeout(
-        Promise.all([getFriends(), getIncomingRequests()]),
+      // allSettled ipv Promise.all: als één query faalt (RLS, netwerk),
+      // tonen we nog steeds de andere lijst i.p.v. de hele modal te breken.
+      const settled = await _withTimeout(
+        Promise.allSettled([getFriends(), getIncomingRequests()]),
         10000,
         'friends'
       );
+      friends  = settled[0].status === 'fulfilled' ? settled[0].value : [];
+      requests = settled[1].status === 'fulfilled' ? settled[1].value : [];
+      if (settled[0].status === 'rejected') console.warn('[Friends] getFriends failed:', settled[0].reason?.message || settled[0].reason);
+      if (settled[1].status === 'rejected') console.warn('[Friends] getIncomingRequests failed:', settled[1].reason?.message || settled[1].reason);
       _friendsCache = { friends, requests, ts: Date.now() };
     }
     const reqCount = requests.length;
