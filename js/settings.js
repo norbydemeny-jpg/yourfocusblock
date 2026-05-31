@@ -284,14 +284,23 @@ function wireSettings(){
   }
   if(userInp){
     let _utimer = null;
+    const _saveName = async () => {
+      if(_utimer){ clearTimeout(_utimer); _utimer = null; }
+      const v = userInp.value.trim();
+      if(!v || v.length < 2) return;
+      const cur = window.fbMyProfile?.();
+      if(cur && cur.username === v) return; // niets veranderd → geen onnodige write
+      try { await window.updateMyProfile({ username: v }); }
+      catch(err){ if(typeof banner === 'function') banner(err.message || 'Error'); }
+    };
+    // Tijdens typen: kort debouncen. Bij verlaten van het veld (ook bij het
+    // sluiten van de instellingen) meteen flushen, zodat de gekozen naam
+    // altijd bewaard wordt — ook als je sneller sluit dan de debounce.
     userInp.oninput = () => {
       if(_utimer) clearTimeout(_utimer);
-      _utimer = setTimeout(async () => {
-        const v = userInp.value.trim();
-        if(!v || v.length < 2) return;
-        try { await window.updateMyProfile({ username: v }); } catch(err){}
-      }, 800);
+      _utimer = setTimeout(_saveName, 600);
     };
+    userInp.onblur = _saveName;
   }
   if(logoutBtn){
     logoutBtn.onclick = async () => {

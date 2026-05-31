@@ -133,16 +133,71 @@ function renderHome(){
   if(lastPlan && lastPlan.blocks && lastPlan.blocks.length) cards.push({m:'last', t:'card_last_t', d:'card_last_d', tag:'card_last_tag'});
 
   const wrap = document.getElementById('startCards'); wrap.innerHTML = '';
-  cards.forEach(c => {
+  // Hero/sub variants: Quick Blocks is the front door (hero), the rest are subordinate.
+  const BOLT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2 L4 14 h7 l-1 8 9-12 h-7 l1-8 z" stroke-linejoin="round"/></svg>';
+  const SUB_ICONS = {
+    day:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>',
+    agenda: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 12 L12 6"/><path d="M12 12 L16 14"/></svg>',
+    last:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>',
+  };
+
+  // ─── Build the layout: Hero first, then "Of plan vooruit" divider, then subs ───
+  const hero = cards.find(c => c.m === 'blocks');
+  const subs = cards.filter(c => c.m !== 'blocks');
+
+  // 1. Hero
+  if (hero) {
+    const tag = T(hero.tag);
+    const heroEl = document.createElement('button');
+    heroEl.type = 'button';
+    heroEl.className = 'start-card hero press';
+    heroEl.innerHTML = `
+      <span class="sc-bolt">${BOLT_SVG}</span>
+      ${tag ? `<span class="sc-tag">⚡ ${esc(tag)}</span>` : ''}
+      <span class="sc-title">${esc(T(hero.t))}</span>
+      <span class="sc-desc">${esc(T(hero.d))}</span>
+      <span class="sc-cta">${esc(T('begin') || 'Start')} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" width="14" height="14"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>`;
+    heroEl.onclick = () => startMode(hero.m);
+    wrap.appendChild(heroEl);
+  }
+
+  // 2. Section divider
+  const divider = document.createElement('div');
+  divider.className = 'sec-divider';
+  divider.innerHTML = `<span>${esc(T('home_divider_plan') || 'Of plan vooruit')}</span>`;
+  wrap.appendChild(divider);
+
+  // 3. Sub cards
+  subs.forEach(c => {
     const tag = T(c.tag);
     const el = document.createElement('button');
-    el.className = 'start-card'; el.type = 'button';
-    el.innerHTML = `${tag ? `<span class="sc-tag">${esc(tag)}</span>` : ''}<span class="sc-title">${esc(T(c.t))}</span><span class="sc-desc">${esc(T(c.d))}</span><span class="sc-arrow">→</span>`;
+    el.type = 'button';
+    if (c.m === 'last') {
+      el.className = 'start-card sub resume press';
+      el.innerHTML = `
+        <span class="sc-icon">${SUB_ICONS.last}</span>
+        <span class="sc-body">
+          <span class="sc-title">${esc(T(c.t))}</span>
+          <span class="sc-desc">${esc(T(c.d))}</span>
+        </span>
+        <span class="sc-go">→</span>`;
+    } else {
+      el.className = 'start-card sub press';
+      el.innerHTML = `
+        <span class="sc-icon">${SUB_ICONS[c.m] || ''}</span>
+        ${tag ? `<span class="sc-tag">${esc(tag)}</span>` : ''}
+        <span class="sc-title">${esc(T(c.t))}</span>
+        <span class="sc-desc">${esc(T(c.d))}</span>`;
+    }
     el.onclick = () => startMode(c.m);
     wrap.appendChild(el);
   });
 
+  // 4. "Straks op het programma" hook — inserted BEFORE the hero
+  renderNextupHook();
+
   renderHomeSocial();
+  renderHomeValueProps();
   renderHomeSubjectNudge();
 }
 
@@ -188,6 +243,126 @@ function _socAv(f, size){
     : `<span class="fb-av fb-av-init" style="width:${size}px;height:${size}px">${esc((f.username||'?')[0].toUpperCase())}</span>`;
 }
 
+/* ---- count + correctly-pluralised "block" noun, e.g. "<b>1</b> blok" ---- */
+function _nBlk(n){
+  return `<b>${n}</b> ${n === 1 ? T('n_block') : T('n_blocks')}`;
+}
+
+/* ---- "Straks op het programma" hook: next exam or scheduled block ---- */
+function renderNextupHook(){
+  let host = document.getElementById('homeNextupHook');
+  if(!host){
+    const wrap = document.querySelector('.home-wrap');
+    if(!wrap) return;
+    const cards = document.getElementById('startCards');
+    host = document.createElement('button');
+    host.id = 'homeNextupHook';
+    host.type = 'button';
+    host.className = 'home-hook fade-in press';
+    if(cards && cards.parentNode) cards.parentNode.insertBefore(host, cards);
+    else wrap.appendChild(host);
+  }
+
+  // Pick the most relevant "next" piece of info
+  let label = '', title = '', onClick = null;
+
+  // 1. Upcoming exam (within ~14 days) is the most motivating
+  const today = new Date(); today.setHours(0,0,0,0);
+  let nextExam = null;
+  try {
+    if(typeof examDates !== 'undefined' && Array.isArray(examDates)){
+      const sorted = examDates.filter(e => {
+        const d = new Date(e.date); d.setHours(0,0,0,0);
+        return d >= today;
+      }).sort((a,b) => a.date.localeCompare(b.date));
+      nextExam = sorted[0] || null;
+    }
+  } catch(e){}
+
+  // 2. Today's planned blocks (from lastPlan or current blocks)
+  let plannedToday = 0;
+  try {
+    if(typeof blocks !== 'undefined' && Array.isArray(blocks)){
+      plannedToday = blocks.filter(b => !b.isPause).length;
+    }
+  } catch(e){}
+
+  if(nextExam){
+    const d = new Date(nextExam.date); d.setHours(0,0,0,0);
+    const days = Math.round((d - today) / 86400000);
+    let when = '';
+    if(days === 0) when = T('nextup_today') || 'vandaag';
+    else if(days === 1) when = T('nextup_tomorrow') || 'morgen';
+    else when = (T('nextup_in_days') || 'over <b>{n} dagen</b>').replace('{n}', days);
+    label = T('nextup_label');
+    title = T('nextup_exam').replace('{subj}', esc(nextExam.subject || nextExam.title || 'Examen')).replace('{when}', when);
+    if(plannedToday > 0){
+      title += ' · ' + T('nextup_today_blocks').replace('{blk}', _nBlk(plannedToday));
+    }
+    onClick = () => { if(typeof goAgenda === 'function') goAgenda(); };
+  } else if(plannedToday > 0){
+    label = T('nextup_label_today');
+    title = T('nextup_today_only').replace('{blk}', _nBlk(plannedToday));
+    onClick = () => startMode('day');
+  } else {
+    // Hide if nothing useful to show
+    host.style.display = 'none';
+    return;
+  }
+
+  host.style.display = '';
+  host.innerHTML = `
+    <span class="hh-rail"></span>
+    <span class="hh-body">
+      <span class="hh-label">${esc(label)}</span>
+      <span class="hh-title">${title}</span>
+    </span>
+    <span class="hh-go">→</span>`;
+  host.onclick = onClick;
+}
+window.renderNextupHook = renderNextupHook;
+
+/* ---- Home value band: marketing pillars for newcomers / logged-out visitors ----
+   Sells the product (Plan · Focus · Together) to people without an established
+   habit. Established users (streak or history) get a clean, focused home. */
+function renderHomeValueProps(){
+  let host = document.getElementById('homeValueBand');
+  if(!host){
+    const social = document.getElementById('homeSocial');
+    const wrap = document.querySelector('.home-wrap');
+    if(!social && !wrap) return;
+    host = document.createElement('div');
+    host.id = 'homeValueBand';
+    host.className = 'home-value fade-in';
+    if(social && social.parentNode) social.parentNode.insertBefore(host, social);
+    else wrap.appendChild(host);
+  }
+  // Only "sell" to newcomers — established users keep a clean home.
+  const established = (streak >= 2) || (typeof lifetimeBlocks !== 'undefined' && lifetimeBlocks >= 5);
+  if(established){ host.style.display = 'none'; host.innerHTML = ''; return; }
+
+  const ICONS = {
+    plan:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><path d="M3 9h18M8 2.5v4M16 2.5v4"/></svg>',
+    focus:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>',
+    together: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  };
+  const cell = (ic, t, d) => `
+    <div class="hv-cell">
+      <span class="hv-ic">${ic}</span>
+      <span class="hv-t">${esc(t)}</span>
+      <span class="hv-d">${esc(d)}</span>
+    </div>`;
+  host.style.display = '';
+  host.innerHTML = `
+    <div class="hv-head">${esc(T('home_vp_head'))}</div>
+    <div class="hv-grid">
+      ${cell(ICONS.plan,     T('home_vp_plan_t'),     T('home_vp_plan_d'))}
+      ${cell(ICONS.focus,    T('home_vp_focus_t'),    T('home_vp_focus_d'))}
+      ${cell(ICONS.together, T('home_vp_together_t'), T('home_vp_together_d'))}
+    </div>`;
+}
+window.renderHomeValueProps = renderHomeValueProps;
+
 /* ---- Home social: who is studying / friends / motivation ---- */
 function renderHomeSocial(){
   const host = document.getElementById('homeSocial');
@@ -196,10 +371,13 @@ function renderHomeSocial(){
 
   if(!loggedIn){
     host.innerHTML = `
-      <button class="home-social" onclick="openAuthModal()">
-        <span class="hs-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-        <span class="hs-main"><span class="hs-title">${esc(T('home_social_add_t'))}</span><span class="hs-sub">${esc(T('home_social_login_d'))}</span></span>
-        <span class="hs-link">${esc(T('home_social_view'))} →</span>
+      <button class="home-join" onclick="openAuthModal()">
+        <span class="hj-stack"><i></i><i></i><i></i></span>
+        <span class="hj-body">
+          <span class="hj-t">${esc(T('home_join_t'))}</span>
+          <span class="hj-d">${esc(T('home_join_d'))}</span>
+        </span>
+        <span class="hj-cta">${esc(T('home_join_cta'))} →</span>
       </button>`;
     return;
   }
@@ -240,26 +418,56 @@ function renderHomeSocial(){
     sub = T('home_social_be_first') || 'Wees de eerste — ga jij vandaag focussen?';
   }
 
-  const shown = sorted.slice(0, 5);
-  const more = sorted.length - shown.length;
+  // Build the new "friends-card" widget: avatar pills with status dots + names.
+  const liveCountTxt = studying.length || sorted.length;
+  let headerTitle;
+  if(studying.length){
+    headerTitle = `<span class="fc-count">${studying.length}</span> ${esc((T('home_social_studying_now') || 'vrienden studeren nu'))}`;
+  } else if(onBreak.length){
+    headerTitle = `<span class="fc-count">${onBreak.length}</span> ${esc((T('home_social_on_break') || 'op pauze'))}`;
+  } else {
+    headerTitle = esc(T('home_social_none') || 'Niemand studeert nu');
+  }
+
+  // Top 6 friends (prototype shows ~5–6 pills + add tile)
+  const shown = sorted.slice(0, 6);
 
   host.innerHTML = `
-    <button class="home-social" onclick="openFriendsModal()">
-      <span class="hs-dot ${studying.length ? 'on' : ''}"></span>
-      <span class="hs-main">
-        <span class="hs-title">${title}</span>
-        ${sub ? `<span class="hs-sub">${sub}</span>` : ''}
-      </span>
-      <span class="hs-avatars">
+    <div class="friends-card ${studying.length ? 'has-live' : ''}">
+      <div class="fc-head">
+        <span class="fc-live-dot"><i></i></span>
+        <span class="fc-title">${headerTitle}</span>
+        <button class="fc-all press" onclick="openFriendsModal()">${esc((T('home_social_view') || 'Alles'))} →</button>
+      </div>
+      <div class="fc-pills">
         ${shown.map(f => `
-          <span class="hs-av-wrap" title="${esc(f.username)} — ${esc(_statusLbl(f.status))}">
-            ${_socAv(f, 32)}
-            <span class="hs-status-dot hs-${esc(f.status || 'offline')}"></span>
-          </span>`).join('')}
-        ${more > 0 ? `<span class="hs-av hs-more">+${more}</span>` : ''}
-      </span>
-      <span class="hs-link">${esc(T('home_social_view'))} →</span>
-    </button>`;
+          <button class="fc-pill press" title="${esc(f.username)} — ${esc(_statusLbl(f.status))}" onclick="openFriendsModal()">
+            <span class="fc-av-wrap">
+              ${_fcAv(f, 50)}
+              <span class="fc-status ${esc(f.status || 'offline')}"></span>
+            </span>
+            <span class="fc-name">${esc(f.username || '?')}</span>
+          </button>`).join('')}
+        <button class="fc-pill add press" title="${esc((T('home_social_invite') || 'Vriend toevoegen'))}" onclick="openFriendsModal()">
+          <span class="fc-av-wrap"><span class="fc-av">＋</span></span>
+          <span class="fc-name">${esc((T('home_social_invite_short') || 'Nodig uit'))}</span>
+        </button>
+      </div>
+      ${sub ? `<div class="fc-sub">${sub}</div>` : ''}
+    </div>`;
+}
+
+/* avatar helper specifically for the friends-card pills (larger circles, colored backgrounds) */
+function _fcAv(f, size){
+  if(typeof window.fbAvatarHTML === 'function'){
+    return window.fbAvatarHTML(f.username, f.avatar_url, size);
+  }
+  // Fallback: colored initial circle
+  const initial = (f.username || '?')[0].toUpperCase();
+  const colors = ['#fb7185','#67e8f9','#c084fc','#fcd34d','#6ee7b7','#f0a868','#a78bfa'];
+  const hash = (f.username || '').split('').reduce((a,c) => a + c.charCodeAt(0), 0);
+  const bg = colors[hash % colors.length];
+  return `<span class="fb-av fb-av-init" style="background:${bg};width:${size}px;height:${size}px;font-size:${Math.round(size*0.42)}px;color:#fff;">${esc(initial)}</span>`;
 }
 
 function _statusLbl(s){
@@ -678,9 +886,37 @@ function sizeRing(){
   const wrap = document.getElementById('ringWrap');
   const stage = document.getElementById('stage');
   if(!wrap || !stage) return;
+  const zen = document.body.classList.contains('zen');
+  // Mobiel (en als fallback): ring lekker groot; daar mag de stage bewust scrollen.
   const avail = Math.min(stage.clientWidth || 360, (window.innerHeight || 700) * 0.46);
   let size = Math.max(200, Math.min(360, avail - 40));
-  if(document.body.classList.contains('zen')) size = Math.max(240, Math.min(420, Math.min(stage.clientWidth - 40, window.innerHeight * 0.55)));
+
+  // Desktop, niet-zen: bereken de ring uit de ECHTE vrije ruimte zodat missie +
+  // ring + eindtijd + start/stop samen ALTIJD passen — geen scroll, de play-knop
+  // valt nooit onder de vouw (ook niet op fullscreen). We kunnen niet op
+  // scrollHeight steunen (justify-content:center maakt scrollHeight==clientHeight
+  // zodra de inhoud past), dus tellen we zelf alle flow-broertjes op: hun hoogte +
+  // verticale marges + de flex-gaps + de stage-padding. Companion en vriendenbalk
+  // staan absoluut en tellen dus niet mee. De rest is voor de ring.
+  if(window.innerWidth >= 821 && !zen){
+    const cs = getComputedStyle(stage);
+    const gap = parseFloat(cs.gap) || 0;
+    let used = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    let items = 0;
+    [...stage.children].forEach(c => {
+      const s = getComputedStyle(c);
+      if(s.display === 'none' || s.position === 'absolute') return;
+      items++;
+      const my = parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+      used += (c === wrap) ? my : (c.offsetHeight + my); // ring telt enkel z'n marges
+    });
+    used += gap * Math.max(0, items - 1);
+    const free = stage.clientHeight - used - 3;      // 3px speling tegen afronding
+    const maxW = (stage.clientWidth || 360) - 72;    // nooit breder dan de stage
+    size = Math.max(168, Math.min(360, Math.min(maxW, free)));
+  }
+
+  if(zen) size = Math.max(240, Math.min(420, Math.min(stage.clientWidth - 40, window.innerHeight * 0.55)));
   wrap.style.width = size + 'px'; wrap.style.height = size + 'px';
   const svg = document.getElementById('ringSvg');
   svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
@@ -948,7 +1184,9 @@ function checkPauseSuggestion(){
   if(streak > 0 && streak % 3 === 0){
     const b = document.createElement('div');
     b.className = 'pause-suggest';
-    b.innerHTML = `<span>💡 ${streak} blokken zonder pauze — pauze inlassen?</span><button onclick="addQuickPause();this.closest('.pause-suggest').remove()">＋ Pauze</button><button onclick="this.closest('.pause-suggest').remove()">✕</button>`;
+    const suggestTxt = Tf('pause_streak_q', {n: streak}) || `${streak} blokken zonder pauze — pauze inlassen?`;
+    const addTxt = T('pause_add') || '＋ Pauze';
+    b.innerHTML = `<span>💡 ${esc(suggestTxt)}</span><button onclick="addQuickPause();this.closest('.pause-suggest').remove()">${esc(addTxt)}</button><button onclick="this.closest('.pause-suggest').remove()">✕</button>`;
     const host = document.getElementById('blocksList');
     if(host){ host.before(b); setTimeout(() => b.remove && b.isConnected && b.remove(), 8000); }
   }
@@ -1010,6 +1248,142 @@ function confirmLongBreak(mins){
 }
 window.closeLongBreakModal = closeLongBreakModal;
 window.confirmLongBreak    = confirmLongBreak;
+
+// ── Quick-Add popup ─────────────────────────────────────────────────
+// Eén gepolijste modaal voor snel focus-blokken of pauzes toevoegen, met
+// een duur-slider, een aantal-slider en (voor focus) vak-chips + live preview.
+let _qa = { type:'focus', mins:25, count:1, subject:'' };
+
+function qaCfg(type){
+  if(type === 'short') return { min:3,  max:20, step:1, def:(S && S.short) ? S.short : 10 };
+  if(type === 'long')  return { min:15, max:45, step:5, def:(S && S.long)  ? S.long  : 25 };
+  return { min:5, max:90, step:5, def:25 }; // focus
+}
+
+function openQuickAdd(type, mins){
+  document.getElementById('qaPopOv')?.remove();
+  const t = (type === 'short' || type === 'long' || type === 'focus') ? type : 'focus';
+  const cfg = qaCfg(t);
+  _qa = { type:t, mins: mins ? mins : cfg.def, count:1, subject:'' };
+  const ov = document.createElement('div');
+  ov.id = 'qaPopOv';
+  ov.className = 'modal-ov open';
+  ov.innerHTML = `
+    <div class="modal-card qa-pop">
+      <div class="modal-head">
+        <div class="modal-title">⚡ ${esc(T('qa_pop_title') || 'Quick add')}</div>
+        <button class="modal-x" onclick="closeQuickAdd()">✕</button>
+      </div>
+      <div class="modal-body qa-body" id="qaBody"></div>
+    </div>`;
+  ov.onclick = (e) => { if(e.target === ov) closeQuickAdd(); };
+  document.body.appendChild(ov);
+  qaRenderBody();
+}
+function closeQuickAdd(){ document.getElementById('qaPopOv')?.remove(); }
+
+function qaSetType(t){
+  if(_qa.type === t) return;
+  _qa.type = t;
+  _qa.mins = qaCfg(t).def;
+  if(t !== 'focus') _qa.subject = '';
+  qaRenderBody();
+}
+function qaSetSubject(name){
+  _qa.subject = (_qa.subject === name) ? '' : name;
+  qaRenderBody();
+}
+function qaSlide(key, val){
+  _qa[key] = parseInt(val, 10) || (key === 'count' ? 1 : qaCfg(_qa.type).def);
+  qaSyncText();
+}
+// Werk alleen de tekst/preview bij (niet de hele body) zodat slepen vloeiend blijft.
+function qaSyncText(){
+  const mv = document.getElementById('qaMinsVal'); if(mv) mv.textContent = _qa.mins + 'm';
+  const cv = document.getElementById('qaCountVal'); if(cv) cv.textContent = _qa.count;
+  const pv = document.getElementById('qaPreview'); if(pv) pv.innerHTML = qaPreviewHTML();
+  const ab = document.getElementById('qaAddBtn'); if(ab) ab.textContent = Tf('qa_add_n', {n:_qa.count}) || ('＋ Add ' + _qa.count);
+}
+function qaPreviewHTML(){
+  const u = (typeof T==='function' && T('min_short')) ? T('min_short') : 'min';
+  const typeLbl = _qa.type === 'focus'
+    ? (T('dpl_type_focus') || 'Focus')
+    : (_qa.type === 'long' ? (T('ptab_long') || T('dpl_type_pause') || 'Break') : (T('ptab_short') || T('dpl_type_pause') || 'Break'));
+  let line = `<strong>${_qa.count} × ${_qa.mins} ${esc(u)}</strong> ${esc(typeLbl.toLowerCase())}`;
+  if(_qa.type === 'focus') line += ` · ${esc(T('qa_incl_breaks') || 'breaks included')}`;
+  return line;
+}
+function qaRenderBody(){
+  const body = document.getElementById('qaBody');
+  if(!body) return;
+  const cfg = qaCfg(_qa.type);
+  if(_qa.mins < cfg.min) _qa.mins = cfg.min;
+  if(_qa.mins > cfg.max) _qa.mins = cfg.max;
+  const types = [
+    { id:'focus', lbl: T('dpl_type_focus') || 'Focus',  emo:'🎯' },
+    { id:'short', lbl: T('ptab_short') || 'Short',       emo:'☕' },
+    { id:'long',  lbl: T('ptab_long')  || 'Long',        emo:'🌙' }
+  ];
+  const typeToggle = `<div class="qa-seg">${types.map(t =>
+    `<button type="button" class="qa-seg-btn${_qa.type===t.id?' on':''}" onclick="qaSetType('${t.id}')"><span>${t.emo}</span>${esc(t.lbl)}</button>`
+  ).join('')}</div>`;
+
+  const durBlock = `
+    <div class="qa-field">
+      <div class="qa-field-head"><span>${esc(T('qa_dur') || 'Duration')}</span><span class="qa-val" id="qaMinsVal">${_qa.mins}m</span></div>
+      <input type="range" class="qa-slider" id="qaMins" min="${cfg.min}" max="${cfg.max}" step="${cfg.step}" value="${_qa.mins}" oninput="qaSlide('mins',this.value)">
+    </div>`;
+
+  const countBlock = `
+    <div class="qa-field">
+      <div class="qa-field-head"><span>${esc(T('qa_amount') || 'How many')}</span><span class="qa-val" id="qaCountVal">${_qa.count}</span></div>
+      <input type="range" class="qa-slider" id="qaCount" min="1" max="8" step="1" value="${_qa.count}" oninput="qaSlide('count',this.value)">
+    </div>`;
+
+  let subjBlock = '';
+  if(_qa.type === 'focus' && typeof subjects !== 'undefined' && subjects.length){
+    const chips = [`<button type="button" class="qa-chip${_qa.subject===''?' on':''}" onclick="qaSetSubject('')">${esc(T('qa_subj_none') || 'None')}</button>`]
+      .concat(subjects.map(s => {
+        const c = (typeof colorFor==='function') ? colorFor(s.name) : 'var(--accent)';
+        return `<button type="button" class="qa-chip${_qa.subject===s.name?' on':''}" onclick="qaSetSubject(${JSON.stringify(s.name).replace(/"/g,'&quot;')})"><span class="qa-chip-dot" style="background:${c}"></span>${esc(s.name)}</button>`;
+      })).join('');
+    subjBlock = `<div class="qa-field"><div class="qa-field-head"><span>${esc(T('qa_subj_opt') || 'Subject (optional)')}</span></div><div class="qa-chips">${chips}</div></div>`;
+  }
+
+  body.innerHTML = `
+    ${typeToggle}
+    ${durBlock}
+    ${countBlock}
+    ${subjBlock}
+    <div class="qa-preview" id="qaPreview">${qaPreviewHTML()}</div>
+    <button class="qa-add" id="qaAddBtn" type="button" onclick="confirmQuickAdd()">${esc(Tf('qa_add_n', {n:_qa.count}) || ('＋ Add ' + _qa.count))}</button>`;
+}
+function confirmQuickAdd(){
+  const wasEmpty = !running && blocks.length === 0;
+  const n = Math.max(1, Math.min(8, _qa.count));
+  if(_qa.type === 'focus'){
+    const brMins = _qa.mins < 30 ? 5 : ((S && S.short) ? S.short : 10);
+    for(let i = 0; i < n; i++){
+      blocks.push({id:nid++, subject:_qa.subject || '', mins:_qa.mins, note:'', tasks:[], done:false, status:null});
+      blocks.push({id:nid++, isPause:true, mins:brMins, note:'', tasks:[], done:false});
+    }
+    maybeSuggestLongBreak();
+  } else {
+    for(let i = 0; i < n; i++){
+      blocks.push({id:nid++, isPause:true, mins:_qa.mins, note:'', tasks:[], done:false});
+    }
+  }
+  if(wasEmpty && blocks.length){ const m = blocks[0].mins; timeLeft = m * 60; totalTime = m * 60; }
+  closeQuickAdd();
+  saveData(); renderApp();
+  banner(Tf('qa_added_n', {n}) || (n + ' blocks added'));
+}
+window.openQuickAdd    = openQuickAdd;
+window.closeQuickAdd   = closeQuickAdd;
+window.qaSetType       = qaSetType;
+window.qaSetSubject    = qaSetSubject;
+window.qaSlide         = qaSlide;
+window.confirmQuickAdd = confirmQuickAdd;
 
 function addBlock(){
   blocks.push({id:nid++, subject:'', mins:S.focus, note:'', tasks:[], done:false, status:null});
@@ -1242,20 +1616,48 @@ function openAgendaDayOptions(dateStr) {
 
   const planExists = !!dayPlans[dateStr] || (dateStr === todayStr() && blocks.length > 0);
 
+  // Header-info: weekdag + dag-badge + samenvatting van wat er gepland staat.
+  const weekday  = d.toLocaleDateString(lang, {weekday:'long'});
+  const dayNum   = d.getDate();
+  const monShort = d.toLocaleDateString(lang, {month:'short'}).replace('.','');
+  const planMins = _agDayItems(dateStr)
+    .filter(it => it.kind === 'focus' || it.kind === 'pause')
+    .reduce((s,it) => s + (it.endMin - it.startMin), 0);
+  const subLine  = planExists ? fmtDur(planMins) : T('agdo_empty');
+
+  const _ic = {
+    edit:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    plan:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M12 14v4M10 16h4"/></svg>',
+    trash:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    exam:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c0 1.5 2.7 2.5 6 2.5s6-1 6-2.5v-5"/></svg>'
+  };
+  const _chev = '<svg class="agdo-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+  const _row = (variant, icon, label, desc, onclick) =>
+    `<button class="agdo-action ${variant}" onclick="${onclick}">
+       <span class="agdo-ic">${icon}</span>
+       <span class="agdo-actxt"><span class="agdo-aclbl">${esc(label)}</span><span class="agdo-acdesc">${esc(desc)}</span></span>
+       ${_chev}
+     </button>`;
+
+  const actions = planExists
+    ? _row('agdo-primary', _ic.edit, T('agenda_edit_this') || T('agenda_edit_day'), T('agdo_edit_desc'), `closeAgendaDayOptions(); editDayPlan('${dateStr}')`)
+      + _row('', _ic.exam, T('agenda_add_exam_here'), T('agdo_exam_desc'), `closeAgendaDayOptions(); openExamModal(null, '${dateStr}')`)
+      + `<div class="agdo-sep"></div>`
+      + _row('agdo-danger', _ic.trash, T('agenda_remove_plan'), T('agdo_remove_desc'), `closeAgendaDayOptions(); _confirmDeletePlan('${dateStr}')`)
+    : _row('agdo-primary', _ic.plan, T('agenda_plan_this') || T('agenda_plan_day'), T('agdo_plan_desc'), `closeAgendaDayOptions(); planFromAgenda('${dateStr}')`)
+      + _row('', _ic.exam, T('agenda_add_exam_here'), T('agdo_exam_desc'), `closeAgendaDayOptions(); openExamModal(null, '${dateStr}')`);
+
   modal.innerHTML = `
-    <div class="modal confirm-modal" style="max-width:360px;">
-      <div class="modal-head">
-        <div class="modal-title" style="font-size:1.1rem;">${esc(dateFmt)}</div>
-        <button class="modal-x" onclick="closeAgendaDayOptions()">✕</button>
+    <div class="modal agdo-modal" role="dialog" aria-label="${esc(dateFmt)}">
+      <div class="agdo-head">
+        <div class="agdo-daybadge"><span class="agdo-daybadge-num">${dayNum}</span><span class="agdo-daybadge-mon">${esc(monShort)}</span></div>
+        <div class="agdo-headtxt">
+          <div class="agdo-title">${esc(weekday)}</div>
+          <div class="agdo-sub">${esc(subLine)}</div>
+        </div>
+        <button class="agdo-x" onclick="closeAgendaDayOptions()" aria-label="✕">✕</button>
       </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:10px; padding:15px 0 5px;">
-        ${planExists 
-          ? `<button class="primary-btn" style="width:100%; text-align:center; padding:12px;" onclick="closeAgendaDayOptions(); editDayPlan('${dateStr}')">✏️ ${esc(T('agenda_edit_this') || T('agenda_edit_day'))}</button>
-             <button class="danger-btn" style="width:100%; text-align:center; padding:12px; border:1px solid #ef4444; background:rgba(239,68,68,0.1); color:#ef4444;" onclick="closeAgendaDayOptions(); _confirmDeletePlan('${dateStr}')">🗑️ ${esc(T('agenda_remove_plan'))}</button>`
-          : `<button class="primary-btn" style="width:100%; text-align:center; padding:12px;" onclick="closeAgendaDayOptions(); planFromAgenda('${dateStr}')">📅 ${esc(T('agenda_plan_this') || T('agenda_plan_day'))}</button>`
-        }
-        <button class="sec-btn" style="width:100%; text-align:center; padding:12px; background:var(--bg3); border:1px solid var(--border);" onclick="closeAgendaDayOptions(); openExamModal(null, '${dateStr}')">🎓 ${esc(T('agenda_add_exam_here'))}</button>
-      </div>
+      <div class="agdo-actions">${actions}</div>
     </div>
   `;
   modal.classList.add('open');
@@ -1625,12 +2027,27 @@ function renderAgenda(){
   // ── Main view ──
   let mainHtml = '';
   if(view === 'week'){
-    const HOUR_START = 6, HOUR_END = 23;
-    const HOURS = HOUR_END - HOUR_START;
     const isMobile = (typeof window !== 'undefined' && window.innerWidth <= 760);
     // Op mobiel grotere uren-cellen + alleen 1 dag per scherm zodat blokken
     // de volle breedte krijgen en pauzes makkelijk tapbaar zijn.
     const HOUR_PX = isMobile ? 84 : 64;
+
+    const days = [];
+    for(let i = 0; i < 7; i++){ const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push({d, ds:_agIsoDate(d), isToday: _agIsoDate(d) === today}); }
+
+    // Tijdas: standaard 6:00–24:00, maar uitgebreid zodat élk gepland blok of
+    // examen bereikbaar is (ook laat op de avond, bv. 23:00). De tijdlijn zit
+    // in een eigen scroll-container (zie CSS), dus een ruimere as maakt de
+    // pagina zelf niet langer — je scrolt gewoon binnen het rooster.
+    const _rangeDays = isMobile ? days.filter(d => d.ds === _agIsoDate(focusDate)) : days;
+    let _earliest = 6 * 60, _latest = 24 * 60;
+    _rangeDays.forEach(dy => _agDayItems(dy.ds).forEach(it => {
+      if(it.startMin < _earliest) _earliest = it.startMin;
+      if(it.endMin   > _latest)   _latest   = it.endMin;
+    }));
+    const HOUR_START = Math.max(0, Math.min(6, Math.floor(_earliest / 60)));
+    const HOUR_END   = Math.min(28, Math.max(24, Math.ceil(_latest / 60)));
+    const HOURS = HOUR_END - HOUR_START;
     window._agHourPx     = HOUR_PX;
     window._agHourSpan   = HOURS;
     window._agHourStartMin = HOUR_START * 60;
@@ -1638,10 +2055,7 @@ function renderAgenda(){
     const totalMin = HOURS * 60;
 
     let hoursHtml = '';
-    for(let h = HOUR_START; h <= HOUR_END; h++) hoursHtml += `<div class="ag-hour-lbl">${String(h).padStart(2,'0')}:00</div>`;
-
-    const days = [];
-    for(let i = 0; i < 7; i++){ const d = new Date(weekStart); d.setDate(d.getDate()+i); days.push({d, ds:_agIsoDate(d), isToday: _agIsoDate(d) === today}); }
+    for(let h = HOUR_START; h <= HOUR_END; h++){ const hl = h % 24; hoursHtml += `<div class="ag-hour-lbl">${String(hl).padStart(2,'0')}:00</div>`; }
 
     const dayHdrs = days.map((dy,i) => `<div class="ag-day-hdr ${dy.isToday?'is-today':''}"><div class="ag-day-lbl">${dn[i]}</div><div class="ag-day-num">${dy.d.getDate()}</div></div>`).join('');
 
@@ -1791,6 +2205,29 @@ function renderAgenda(){
     </div>`;
 
   _agWireDrag();
+  _agScrollToTime();
+}
+
+// Scroll de tijdlijn naar een zinvol startpunt: het eerste geplande blok (zodat
+// je meteen je planning ziet), anders de huidige tijd, anders 8:00. Zo opent de
+// agenda niet bovenaan een lege nacht en hoef je niet te zoeken naar je blokken.
+function _agScrollToTime(){
+  setTimeout(() => {
+    const body = document.querySelector('#agenda .ag-week-body, #agenda .ag-mob-body');
+    if(!body || body.scrollHeight <= body.clientHeight) return;
+    const hourPx   = window._agHourPx || 64;
+    const startMin = window._agHourStartMin || 0;
+    const spanMin  = (window._agHourSpan || 18) * 60;
+    // 1) Eerste blok: scrol er net iets boven zodat het volledig zichtbaar is.
+    let firstTop = Infinity;
+    body.querySelectorAll('.ag-block').forEach(b => { const t = parseFloat(b.style.top) || 0; if(t < firstTop) firstTop = t; });
+    if(firstTop !== Infinity){ body.scrollTop = Math.max(0, firstTop - hourPx * 0.75); return; }
+    // 2) Geen blokken: huidige tijd als die binnen de as valt, anders 8:00.
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const targetMin = (nowMin >= startMin && nowMin <= startMin + spanMin) ? nowMin : 8 * 60;
+    body.scrollTop = Math.max(0, ((targetMin - startMin) / 60) * hourPx - hourPx * 1.5);
+  }, 60);
 }
 
 function planFromAgenda(dateStr){

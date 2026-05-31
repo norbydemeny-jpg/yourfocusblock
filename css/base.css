@@ -11,36 +11,80 @@
 }
 html, body { height: 100%; }
 
-/* ── Design tokens ── */
+/* ── Design tokens (redesign drop-in: richer ramps, motion + elevation) ── */
 :root {
-  /* Backgrounds */
-  --bg:  #0f0f0e;
-  --bg2: #181816;
-  --bg3: #222220;
-  --bg4: #2c2c29;
+  /* Surface layers (near-black → raised) */
+  --bg:       #0e0e0d;
+  --bg2:      #161614;
+  --bg3:      #201f1d;
+  --bg4:      #2a2926;
+  --bg-elev:  #1b1b18;             /* raised hero/card base */
+  --scrim:    rgba(6,6,5,0.66);    /* modal/sheet backdrop  */
 
-  /* Accent (default: lime) */
-  --accent: #c8f060;
-  --at:     #0c0e06;   /* text on accent */
-  --glow:   rgba(200,240,96,0.13);
+  /* Accent ramp (default: lime) */
+  --accent:       #c8f060;
+  --accent-press: #b6e348;         /* deeper for press/hover */
+  --accent-soft:  rgba(200,240,96,0.14);   /* tints/fills */
+  --accent-dim:   rgba(200,240,96,0.30);   /* borders     */
+  --at:           #0c0e06;         /* text on accent */
+  --glow:         rgba(200,240,96,0.22);
 
   /* Text */
-  --text:   #f0ede6;
-  --muted:  #6b6862;
-  --mid:    #9a9790;
+  --text:   #f2efe8;
+  --mid:    #a3a097;
+  --muted:  #6d6a62;
 
   /* Borders */
-  --border:  rgba(255,255,255,0.08);
-  --border2: rgba(255,255,255,0.05);
+  --border:        rgba(255,255,255,0.085);
+  --border2:       rgba(255,255,255,0.05);
+  --border-strong: rgba(255,255,255,0.16);
+
+  /* Semantic */
+  --ok:        #6ee7b7;
+  --warn:      #fcd34d;
+  --err:       #f87171;
+  --pause:     #818cf8;             /* breaks stay indigo (existing language) */
+  --pause-soft:rgba(129,140,248,0.12);
+
+  /* Focus ring */
+  --focus: #c8f060;
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus);
+
+  /* Spacing scale (4·8·12·16·24·32·48·64) */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px; --sp-8: 64px;
 
   /* Radii */
-  --r-sm: 12px;
-  --r-md: 18px;
-  --r-lg: 24px;
-  --r-xl: 28px;
+  --r-sm:  12px;
+  --r-md:  18px;
+  --r-lg:  24px;
+  --r-xl:  30px;
+  --r-pill: 999px;
 
-  /* Shadow */
-  --shadow: 0 8px 40px rgba(0,0,0,0.4);
+  /* Elevation — dark-aware (shadow + faint inner top-light) */
+  --elev-1: 0 1px 2px rgba(0,0,0,0.40),  0 1px 0 rgba(255,255,255,0.03) inset;
+  --elev-2: 0 6px 22px rgba(0,0,0,0.42), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --elev-3: 0 18px 50px rgba(0,0,0,0.55),0 1px 0 rgba(255,255,255,0.05) inset;
+  --elev-accent: 0 8px 30px var(--glow);
+  --shadow: var(--elev-3);          /* keep legacy alias */
+
+  /* Type scale */
+  --fz-display: clamp(40px, 11vw, 56px);
+  --fz-h1:      clamp(30px, 8vw, 40px);
+  --fz-h2:      24px;
+  --fz-body-lg: 18px;
+  --fz-body:    15px;
+  --fz-caption: 13px;
+  --fz-micro:   11px;
+
+  /* Motion tokens */
+  --dur-fast:   120ms;
+  --dur:        200ms;
+  --dur-slow:   360ms;
+  --dur-screen: 420ms;
+  --ease-out-quick: cubic-bezier(0.22, 1, 0.36, 1);    /* snappy settle  */
+  --ease-spring:    cubic-bezier(0.34, 1.56, 0.64, 1); /* gentle overshoot */
+  --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
 
   /* Fonts */
   --ff: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;

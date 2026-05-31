@@ -132,9 +132,21 @@ function confetti(){
    Calls onReorder(fromIdx, toIdx) when a drag completes.
    ──────────────────────────────────────────────────────────────── */
 function attachPointerDrag(host, getItems, getIdx, onReorder){
-  let ghost = null, srcEl = null, fromIdx = null, lastDropIdx = null, ghostOffY = 0;
+  // De callbacks worden op de host bewaard en bij elke render ververst. De
+  // event-listeners wiren we daarentegen MAAR ÉÉN KEER. Dit is cruciaal: deze
+  // functie wordt elke render opnieuw aangeroepen op hetzelfde, vaste host-
+  // element (bv. #plannerBlocks). Zonder deze guard stapelden de listeners op,
+  // waardoor één pointerup `onReorder` meerdere keren afvuurde → de volgorde
+  // raakte verminkt of het slepen leek gewoon niet te werken.
+  host._pdGetItems = getItems;
+  host._pdGetIdx   = getIdx;
+  host._pdReorder  = onReorder;
+  if(host._pdWired) return;
+  host._pdWired = true;
+
+  let ghost = null, srcEl = null, fromIdx = null, lastDropIdx = null, ghostOffY = 0, moved = false;
   function calcDropIdx(y){
-    const items = getItems();
+    const items = host._pdGetItems();
     for(let i = 0; i < items.length; i++){
       const r = items[i].getBoundingClientRect();
       if(y < r.top + r.height/2) return i;
@@ -143,7 +155,7 @@ function attachPointerDrag(host, getItems, getIdx, onReorder){
   }
   function showDropLine(dropIdx){
     host.querySelectorAll('.bb-drop-line').forEach(l => l.remove());
-    const items = getItems();
+    const items = host._pdGetItems();
     const line = document.createElement('div'); line.className = 'bb-drop-line';
     if(dropIdx >= items.length) host.appendChild(line);
     else items[dropIdx].before(line);
@@ -155,7 +167,7 @@ function attachPointerDrag(host, getItems, getIdx, onReorder){
     const item = handle.closest('.bb-card,.block-item');
     if(!item) return;
     e.preventDefault();
-    srcEl = item; fromIdx = getIdx(item);
+    srcEl = item; fromIdx = host._pdGetIdx(item); moved = false;
     const r = item.getBoundingClientRect();
     ghostOffY = e.clientY - r.top;
     ghost = item.cloneNode(true);
@@ -170,6 +182,7 @@ function attachPointerDrag(host, getItems, getIdx, onReorder){
   host.addEventListener('pointermove', (e) => {
     if(fromIdx === null || !ghost) return;
     e.preventDefault();
+    moved = true;
     if(rafId) return;
     const clientY = e.clientY;
     rafId = requestAnimationFrame(() => {
@@ -187,11 +200,17 @@ function attachPointerDrag(host, getItems, getIdx, onReorder){
     if(rafId){ cancelAnimationFrame(rafId); rafId = null; }
     if(ghost){ ghost.remove(); ghost = null; }
     host.querySelectorAll('.bb-drop-line').forEach(l => l.remove());
-    getItems().forEach(el => el.style.opacity = '');
+    host._pdGetItems().forEach(el => el.style.opacity = '');
     if(srcEl) srcEl.style.opacity = '';
-    if(lastDropIdx !== null && lastDropIdx !== fromIdx) onReorder(fromIdx, lastDropIdx);
-    fromIdx = null; lastDropIdx = null; srcEl = null;
+    // Onderdruk de klik die direct na een sleep-actie vuurt, anders opent het
+    // block-detail (de handle zit ín de klikbare kaart) na elke herordening.
+    if(moved) host._pdSuppressClick = true;
+    if(lastDropIdx !== null && lastDropIdx !== fromIdx) host._pdReorder(fromIdx, lastDropIdx);
+    fromIdx = null; lastDropIdx = null; srcEl = null; moved = false;
   }
   host.addEventListener('pointerup', endDrag);
   host.addEventListener('pointercancel', endDrag);
+  host.addEventListener('click', (e) => {
+    if(host._pdSuppressClick){ host._pdSuppressClick = false; e.stopPropagation(); e.preventDefault(); }
+  }, true);
 }

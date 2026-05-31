@@ -5,6 +5,21 @@
 import { supabase } from './supabaseClient.js';
 
 let _lbTab = 'today';
+let _lbCache = null; // { userId, allIds, pm, todayMins, weekMins, ts }
+
+// Cache ook in localStorage bewaren, zodat de ranglijst na een herlaad meteen
+// de laatst bekende stand toont i.p.v. 'Laden...' — en stil ververst.
+const _LB_CACHE_KEY = 'fb_lb_cache_v1';
+try { const _raw = localStorage.getItem(_LB_CACHE_KEY); if (_raw) _lbCache = JSON.parse(_raw); } catch (e) {}
+
+// Hard timeout zodat een vastgelopen query de ranglijst nooit eeuwig op
+// 'Laden...' laat staan (trage verbinding of RLS-probleem).
+function _withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout:${label}`)), ms))
+  ]);
+}
 
 // ── Helpers ────────────────────────────────────────────
 function getCurrentUserId() {
@@ -31,38 +46,42 @@ async function _loadData() {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
-  // Vrienden ophalen
-  const { data: fships, error: fErr } = await supabase
-    .from('friendships')
-    .select('requester_id, receiver_id')
-    .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
-    .eq('status', 'accepted');
-  if (fErr) console.error('[Leaderboard] friendships err:', fErr.message);
-
-  const allIds = [
-    userId,
-    ...(fships || []).map(f =>
-      f.requester_id === userId ? f.receiver_id : f.requester_id
-    )
-  ];
-
-  // Datumgrenzen (maandag = start van de week)
-  const now        = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const weekStart  = new Date(todayStart);
-  const dow        = weekStart.getDay(); // 0=zo
-  weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
-
-  // Profielen + sessies parallel
   try {
-    const [profRes, sessRes] = await Promise.all([
+    // Vrienden ophalen — nu MET timeout én binnen de try/catch, zodat een
+    // hangende eerste query niet de hele ranglijst voor altijd blokkeert.
+    const { data: fships, error: fErr } = await _withTimeout(
+      supabase
+        .from('friendships')
+        .select('requester_id, receiver_id')
+        .or(`requester_id.eq.${userId},receiver_id.eq.${userId}`)
+        .eq('status', 'accepted'),
+      8000, 'friendships'
+    );
+    if (fErr) console.error('[Leaderboard] friendships err:', fErr.message);
+
+    const allIds = [
+      userId,
+      ...(fships || []).map(f =>
+        f.requester_id === userId ? f.receiver_id : f.requester_id
+      )
+    ];
+
+    // Datumgrenzen (maandag = start van de week)
+    const now        = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart  = new Date(todayStart);
+    const dow        = weekStart.getDay(); // 0=zo
+    weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
+
+    // Profielen + sessies parallel (ook met timeout)
+    const [profRes, sessRes] = await _withTimeout(Promise.all([
       supabase.from('profiles').select('id, username, avatar_url').in('id', allIds),
       supabase.from('study_sessions')
         .select('user_id, minutes, completed_at')
         .in('user_id', allIds)
         .gte('completed_at', weekStart.toISOString())
         .eq('block_type', 'focus')
-    ]);
+    ]), 8000, 'data');
 
     if (profRes.error) console.error('[Leaderboard] profiles err:', profRes.error.message);
     if (sessRes.error) console.error('[Leaderboard] sessions err:', sessRes.error.message);
@@ -85,9 +104,15 @@ async function _loadData() {
       }
     });
 
-    return { userId, allIds, pm, todayMins, weekMins };
+    const result = { userId, allIds, pm, todayMins, weekMins };
+    _lbCache = { ...result, ts: Date.now() };
+    try { localStorage.setItem(_LB_CACHE_KEY, JSON.stringify(_lbCache)); } catch (e) {}
+    return result;
   } catch (err) {
     console.error('[Leaderboard] Netwerk/API fout:', err);
+    // Val terug op cache van dezelfde gebruiker i.p.v. te falen → nooit
+    // een eindeloze 'Laden...' meer na de eerste succesvolle load.
+    if (_lbCache && _lbCache.userId === userId) return _lbCache;
     return null;
   }
 }
@@ -116,9 +141,28 @@ async function renderLeaderboard() {
   const titleEl = document.querySelector('#leaderboardOv .modal-title');
   if (titleEl) titleEl.textContent = '🏆 ' + T('lb_title');
 
-  const userId = await getCurrentUserId();
+  let userId = await getCurrentUserId();
+  // Net na een (her)load kan de sessie nog niet klaar zijn → wacht heel even op
+  // fbAuthReady i.p.v. meteen 'log in' te tonen (anders moest je refreshen).
+  if (!userId && window.fbAuthReady) {
+    if (!_lbCache) body.innerHTML = `<div style="text-align:center;padding:2rem 0;color:var(--muted)">${T('fr_loading')}</div>`;
+    try { await Promise.race([window.fbAuthReady, new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+    userId = await getCurrentUserId();
+  }
   if (!userId) {
     body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('lb_login_msg')}</p>`;
+    return;
+  }
+
+  // Cache aanwezig? Render direct en ververs stilletjes in de achtergrond.
+  // Zo zien gebruikers nooit nog 'Laden...' nadat ze één keer geladen hebben.
+  if (_lbCache && _lbCache.userId === userId) {
+    _paintLeaderboard(body, _lbCache);
+    _loadData().then(d => {
+      if (d && document.getElementById('leaderboardOv')?.classList.contains('open')) {
+        _paintLeaderboard(body, d);
+      }
+    }).catch(() => {});
     return;
   }
 
@@ -126,11 +170,20 @@ async function renderLeaderboard() {
 
   const data = await _loadData();
   if (!data) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('lb_load_err')}</p>`;
+    body.innerHTML = `
+      <div style="text-align:center;padding:2rem 0;color:var(--muted)">
+        <div style="margin-bottom:14px">${T('lb_load_err')}</div>
+        <button class="btn-ghost" onclick="renderLeaderboard()">${T('fr_retry')}</button>
+      </div>`;
     return;
   }
+  _paintLeaderboard(body, data);
+}
 
-  const { allIds, pm, todayMins, weekMins } = data;
+// ── Paint (gescheiden van laden zodat we vanuit cache én verse data kunnen tekenen) ──
+function _paintLeaderboard(body, data) {
+  if (!body) return;
+  const { allIds, pm, todayMins, weekMins, userId } = data;
   const minsField = _lbTab === 'today' ? todayMins : weekMins;
 
   const entries = allIds
@@ -160,7 +213,7 @@ async function renderLeaderboard() {
         return `
           <div class="lb-row ${e.isMe ? 'lb-me' : ''} ${e.mins === 0 ? 'lb-zero' : ''}">
             <div class="lb-rank">${rank}</div>
-            <div class="lb-avatar-wrap">${(typeof window.fbAvatarHTML==='function') ? window.fbAvatarHTML(e.username, e.avatar, 34) : `<div class="lb-avatar">${e.username[0].toUpperCase()}</div>`}</div>
+            <div class="lb-avatar-wrap">${(typeof window.fbAvatarHTML==='function') ? window.fbAvatarHTML(e.username, e.avatar, 42) : `<div class="lb-avatar">${e.username[0].toUpperCase()}</div>`}</div>
             <div class="lb-info">
               <div class="lb-name">
                 ${_esc(e.username)}
@@ -193,4 +246,5 @@ setInterval(() => {
 window.openLeaderboard  = openLeaderboard;
 window.closeLeaderboard = closeLeaderboard;
 window.switchLbTab      = switchLbTab;
+window.renderLeaderboard = renderLeaderboard;  // retry-knop in foutstaat
 window.fbLoadLeaderboard = _loadData;   // used by the Stats & friends page

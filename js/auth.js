@@ -47,6 +47,41 @@ async function _withTimeout(promise, ms, defaultValue) {
   return result;
 }
 
+// ── Lokale profiel-cache (overleeft trage/hangende Supabase-writes) ──
+//   Als de gebruiker zijn naam/foto wijzigt slaan we de wijziging ook
+//   lokaal op als 'pending'. Zo blijft de gekozen naam staan — ook na een
+//   reload en zelfs als de Supabase-update traag is of op een koude start
+//   blijft hangen — en kunnen we de write later automatisch herhalen tot
+//   hij echt is opgeslagen.
+function _profilePendingKey(id){ return 'fb_profile_pending_' + (id || 'anon'); }
+function _readPendingProfile(id){
+  try { return JSON.parse(localStorage.getItem(_profilePendingKey(id)) || 'null'); }
+  catch { return null; }
+}
+function _writePendingProfile(id, fields){
+  try {
+    const prev = _readPendingProfile(id) || {};
+    localStorage.setItem(_profilePendingKey(id), JSON.stringify({ ...prev, ...fields }));
+  } catch {}
+}
+function _clearPendingProfile(id){
+  try { localStorage.removeItem(_profilePendingKey(id)); } catch {}
+}
+// Probeer niet-gesynced wijzigingen opnieuw naar Supabase te schrijven
+// (fire-and-forget). Wist de pending-cache enkel bij een echte succesvolle write.
+async function _flushPendingProfile(id){
+  const pending = _readPendingProfile(id);
+  if (!pending || !Object.keys(pending).length) return;
+  try {
+    const res = await _withTimeout(
+      supabase.from('profiles').update(pending).eq('id', id),
+      5000,
+      { error: { message: '__timeout__' } }
+    );
+    if (!res?.error) _clearPendingProfile(id);
+  } catch {}
+}
+
 // ── Helpers ────────────────────────────────────────────
 function generateReferralCode(username) {
   const prefix = (username || 'USER')
@@ -113,8 +148,17 @@ async function ensureProfile(user) {
     const existing = selectRes?.data;
     const selErr = selectRes?.error;
 
-    if (selErr) console.warn('[Auth] profile select warn:', selErr.message);
     if (existing) return existing;
+    if (selErr) {
+      // Select kon niet bevestigen of het profiel bestaat (timeout of fout,
+      // vaak tijdens de cold-start query-burst bij het laden). NIET blind
+      // upserten — die write hangt dan meestal óók en gaf de '_Timeout upsert
+      // profile_'-ruis. loadMyProfile toont de user sowieso; een latere
+      // refresh/TOKEN_REFRESHED maakt het profiel alsnog aan indien nodig.
+      console.warn('[Auth] profile select onbevestigd, upsert overgeslagen:', selErr.message);
+      return null;
+    }
+    // existing === null én geen fout → er is écht geen rij → nu aanmaken.
 
     const metaName      = user?.user_metadata?.username;
     const baseName      = (_pendingUsername || metaName || (user.email || 'user').split('@')[0] || 'user').trim().substring(0, 30) || 'user';
@@ -144,7 +188,14 @@ async function ensureProfile(user) {
         if (retryRes?.error) console.error('[Auth] Profiel aanmaken faalt (retry):', retryRes.error.message);
         return retryRes?.data || null;
       }
-      console.error('[Auth] Profiel aanmaken mislukt:', error.message);
+      if (/^Timeout/i.test(error.message || '')) {
+        // Cold-start netwerk-burst liet de write hangen — geen echte fout.
+        // loadMyProfile toont de user al; een latere TOKEN_REFRESHED of herladen
+        // maakt het profiel alsnog aan. Soft-warn i.p.v. een rode error.
+        console.warn('[Auth] profiel-upsert timeout (cold start) — wordt later hersteld');
+      } else {
+        console.error('[Auth] Profiel aanmaken mislukt:', error.message);
+      }
     }
     return created || null;
   } catch (e) {
@@ -423,6 +474,16 @@ async function loadMyProfile(userId){
     console.warn('[Auth] loadMyProfile error:', e?.message || e);
     _myProfile = _keepOrFallback();
   }
+
+  // Pas niet-gesynced lokale wijzigingen toe (naam/foto die de gebruiker koos
+  // terwijl Supabase traag was) en probeer ze opnieuw te schrijven. Zo 'wint'
+  // de door de gebruiker gekozen naam altijd op dit toestel en raakt hij
+  // uiteindelijk gesynct — ook als de oorspronkelijke write was blijven hangen.
+  const pending = _readPendingProfile(userId);
+  if (pending && Object.keys(pending).length){
+    _myProfile = { ..._myProfile, ...pending };
+    _flushPendingProfile(userId); // fire-and-forget retry
+  }
   return _myProfile;
 }
 
@@ -462,22 +523,46 @@ async function updateAuthUI(user) {
 // ── Profiel bijwerken (gebruikersnaam / avatar) ────────
 async function updateMyProfile(fields){
   if (!_currentUser) throw new Error((typeof T==='function'?T('fr_not_logged_in'):'Not logged in'));
-  const { error } = await supabase.from('profiles').update(fields).eq('id', _currentUser.id);
-  if (error) {
-    // The avatar_url column doesn't exist yet → guide the user to run the SQL migration.
-    if (error.message && /avatar_url|column .* does not exist|schema cache/i.test(error.message) && 'avatar_url' in fields){
-      if (typeof window.banner === 'function') window.banner(T('avatar_col_missing'));
-    }
-    throw error;
-  }
+  const uid = _currentUser.id;
+
+  // 1) Optimistisch lokaal toepassen + UI meteen verversen. De naam 'plakt'
+  //    onmiddellijk (geen zichtbare wachttijd) en blijft via de pending-cache
+  //    ook na een reload staan, ongeacht hoe traag Supabase reageert.
   _myProfile = { ..._myProfile, ...fields };
+  _writePendingProfile(uid, fields);
   renderAuthChip();
-  // refresh all the social views that show avatars / usernames
   window.reloadFriendStatuses?.();
   if (typeof window.renderHomeSocial === 'function') window.renderHomeSocial();
   if (typeof window.renderOverviewSocial === 'function') window.renderOverviewSocial();
-  // Refresh open settings pane so the photo shows immediately
-  if (document.getElementById('settingsOv')?.classList.contains('open') && typeof window.renderSettings === 'function') window.renderSettings();
+
+  // 2) Schrijf naar Supabase mét timeout zodat de await nooit oneindig kan
+  //    blijven hangen (de oorzaak waardoor de naam vroeger niet bewaard werd).
+  let res;
+  try {
+    res = await _withTimeout(
+      supabase.from('profiles').update(fields).eq('id', uid),
+      5000,
+      { error: { message: '__timeout__' } }
+    );
+  } catch (e) {
+    res = { error: e || { message: 'network' } };
+  }
+  const error = res?.error;
+
+  if (error && error.message !== '__timeout__') {
+    // De avatar_url-kolom bestaat nog niet → wijs de gebruiker op de SQL-migratie.
+    if (error.message && /avatar_url|column .* does not exist|schema cache/i.test(error.message) && 'avatar_url' in fields){
+      if (typeof window.banner === 'function') window.banner(T('avatar_col_missing'));
+    }
+    // Echte fout (geen timeout): doorgooien zodat de caller kan reageren.
+    // De optimistische UI + pending-cache blijven staan voor een latere retry.
+    throw error;
+  }
+
+  // Echt opgeslagen → pending-cache wissen. Bij een timeout laten we de
+  // pending-cache staan; loadMyProfile flushet die later automatisch.
+  if (!error) _clearPendingProfile(uid);
+
   return _myProfile;
 }
 window.updateMyProfile = updateMyProfile;
@@ -504,11 +589,29 @@ async function handleAuthStateChange(event, session) {
       return;
     }
 
-    // SIGNED_IN of INITIAL_SESSION: profiel garanderen en UI updaten.
+    // SIGNED_IN of INITIAL_SESSION. De zekerheid 'er is een sessie' is genoeg
+    // om als ingelogd te gelden — we mogen daar NOOIT op een trage database-
+    // read (profiel) of -write (ensureProfile) op wachten. Daarom:
+    //   1) _currentUser meteen zetten zodat fbUserId() direct klopt voor
+    //      status.js/friends.js/leaderboard.js die op fbAuthReady wachten;
+    //   2) fbAuthReady meteen resolven en de 6s-safety-net uitschakelen, zodat
+    //      die nooit onterecht 'uitgelogd' toont tijdens een trage cold-start.
+    //      Dit was dé oorzaak van de 'moest refreshen / werkte niet altijd'-bug.
+    //   3) profiel laden (read) + ensureProfile (write) draaien daarna/parallel.
     if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
-      try { await ensureProfile(user); } catch (e) { console.warn('[Auth] ensureProfile:', e?.message || e); }
+      _currentUser = user;
       _lastHandledUserId = user.id;
+      if (!_authInitialized) { _authInitialized = true; resolveAuthReady(); }
       await updateAuthUI(user);
+      ensureProfile(user)
+        .then(p => {
+          // Nieuwe user: profiel net aangemaakt → chip verversen met echte naam.
+          if (p && p.username && (!_myProfile || !_myProfile.username || _myProfile.id !== p.id)) {
+            _myProfile = { ..._myProfile, ...p };
+            renderAuthChip();
+          }
+        })
+        .catch(e => console.warn('[Auth] ensureProfile bg:', e?.message || e));
       return;
     }
 

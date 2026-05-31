@@ -1,0 +1,128 @@
+/* ════════════════════════════════════════════════════════════════
+   motion.css — FocusBlock redesign motion system
+   Drop-in (linked AFTER components.css). Transform/opacity only,
+   GPU-friendly, with a global prefers-reduced-motion fallback.
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── 1 · Standard button press (P4) ──
+   Add .press to any tappable element. ~120ms snappy spring. */
+.press { transition: transform var(--dur-fast) var(--ease-out-quick); }
+.press:active { transform: scale(0.95); }
+.press-soft:active { transform: scale(0.985); }
+
+/* ── 2 · Modal / sheet enter + exit (P10) ── */
+.modal-ov { transition: opacity var(--dur) var(--ease-out-quick); }
+.modal {
+  transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur) ease;
+}
+.modal-ov:not(.open) .modal { transform: translateY(22px) scale(0.985); opacity: 0; }
+.modal-ov.open .modal      { transform: translateY(0) scale(1); opacity: 1; }
+
+/* ── 3 · Screen entrance (transform-only — content stays visible) ── */
+.screen:not(.out) { animation: fb-screen-in var(--dur-screen) var(--ease-out-quick) both; }
+@keyframes fb-screen-in {
+  from { transform: translateY(14px); }
+  to   { transform: translateY(0); }
+}
+@keyframes fb-screen-out {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-10px); }
+}
+/* Stagger helper: add .rise + .r1..r4 */
+.rise { animation: fb-screen-in var(--dur-screen) var(--ease-out-quick) both; }
+.r1 { animation-delay: .05s; } .r2 { animation-delay: .10s; }
+.r3 { animation-delay: .16s; } .r4 { animation-delay: .22s; }
+
+/* ── 4 · Live indicator pulse — studying friend dot (P6) ──
+   Markup: <span class="live-dot"><i></i></span> */
+.live-dot { position: relative; display: inline-block; width: 9px; height: 9px; }
+.live-dot i { position: absolute; inset: 0; border-radius: 50%; background: var(--accent);
+  animation: fb-live 2s var(--ease-in-out) infinite; }
+.live-dot::after { content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 1.5px solid var(--accent); animation: fb-live-ring 2s var(--ease-out-quick) infinite; }
+@keyframes fb-live      { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(.6);opacity:.45} }
+@keyframes fb-live-ring { 0%{transform:scale(1);opacity:.55} 100%{transform:scale(2.6);opacity:0} }
+
+/* ── 5 · Timer ring: idle breathing + smooth running fill (P5) ──
+   JS hook: toggle .ring-idle / .ring-running on #ringWrap. */
+.ring-idle .ring-svg,
+.ring-idle #ringSvg { animation: fb-breathe 4.5s var(--ease-in-out) infinite; }
+.ring-running .ring-fg,
+.ring-running #ringFg { transition: stroke-dashoffset 0.95s linear; }
+@keyframes fb-breathe {
+  0%,100% { transform: scale(1);     filter: drop-shadow(0 0 0 transparent); }
+  50%     { transform: scale(1.018); filter: drop-shadow(0 0 14px var(--glow)); }
+}
+
+/* ── 6 · Celebration burst (P11) — radial pulse + CSS confetti ── */
+#fbCelebrate {
+  position: fixed; inset: 0; z-index: 250; display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 40px; overflow: hidden;
+  background: radial-gradient(circle at 50% 42%,
+    color-mix(in srgb, var(--accent) 18%, var(--bg)) 0%, var(--bg) 60%);
+}
+#fbCelebrate.show { display: flex; animation: fb-cel-in .35s var(--ease-out-quick) both; }
+@keyframes fb-cel-in { from { opacity: 0; } to { opacity: 1; } }
+#fbCelebrate .pulse {
+  position: absolute; top: 42%; left: 50%; width: 240px; height: 240px;
+  margin: -120px 0 0 -120px; border-radius: 50%; border: 2px solid var(--accent);
+}
+#fbCelebrate.show .pulse    { animation: fb-burst 1.4s var(--ease-out-quick) forwards; }
+#fbCelebrate.show .pulse.p2 { animation-delay: .22s; }
+#fbCelebrate.show .pulse.p3 { animation-delay: .44s; }
+#fbCelebrate .cel-check {
+  width: 96px; height: 96px; border-radius: 50%; background: var(--accent); color: var(--at);
+  display: flex; align-items: center; justify-content: center; margin-bottom: 24px;
+  box-shadow: 0 10px 40px var(--glow); position: relative; z-index: 2;
+}
+#fbCelebrate.show .cel-check { animation: fb-pop-scale .5s var(--ease-spring) both; }
+#fbCelebrate .cel-check svg { width: 48px; height: 48px; }
+#fbCelebrate .cel-title { font-family: var(--fs); font-size: 40px; color: var(--text); line-height: 1.1; margin-bottom: 8px; position: relative; z-index: 2; }
+#fbCelebrate .cel-line  { font-family: var(--fs); font-style: italic; font-size: 20px; color: var(--accent); margin-bottom: 28px; position: relative; z-index: 2; }
+#fbCelebrate .cel-stats { display: flex; gap: 12px; margin-bottom: 30px; position: relative; z-index: 2; flex-wrap: wrap; justify-content: center; }
+#fbCelebrate .cel-stat  { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px 22px; min-width: 90px; }
+#fbCelebrate .cs-v { font-family: var(--fm); font-size: 26px; color: var(--accent); line-height: 1; }
+#fbCelebrate .cs-l { font-size: var(--fz-micro); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
+#fbCelebrate .cel-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; position: relative; z-index: 2; }
+#fbCelebrate .cel-primary { background: var(--accent); color: var(--at); border-radius: var(--r-pill); padding: 16px; font-size: 15px; font-weight: 700; border: none; cursor: pointer; transition: transform var(--dur-fast) var(--ease-spring); }
+#fbCelebrate .cel-primary:active { transform: scale(.96); }
+#fbCelebrate .cel-ghost { background: transparent; border: 1px solid var(--border); color: var(--mid); border-radius: var(--r-pill); padding: 14px; font-size: var(--fz-caption); font-weight: 600; cursor: pointer; transition: border-color var(--dur), color var(--dur); }
+#fbCelebrate .cel-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.confetti { position: absolute; top: -20px; width: 10px; height: 15px; border-radius: 2px; opacity: 0; z-index: 1; }
+#fbCelebrate.show .confetti {
+  animation: fb-confetti var(--cd,1.6s) var(--ease-in-out) forwards; animation-delay: var(--cdelay,0s);
+}
+@keyframes fb-burst {
+  0%{transform:scale(.2);opacity:0} 18%{opacity:.6} 70%{opacity:.14} 100%{transform:scale(2.4);opacity:0}
+}
+@keyframes fb-pop-scale { 0%{transform:scale(.5)} 60%{transform:scale(1.08)} 100%{transform:scale(1)} }
+@keyframes fb-confetti {
+  0%{transform:translate(0,0) rotate(0);opacity:1}
+  100%{transform:translate(var(--cx,0),115vh) rotate(var(--cr,540deg));opacity:1}
+}
+
+/* ── Chip / list pop-in (P2) ── */
+@keyframes fb-pop { 0%{transform:scale(.8);opacity:0} 60%{transform:scale(1.04)} 100%{transform:scale(1);opacity:1} }
+.pop-in { animation: fb-pop var(--dur) var(--ease-spring) both; }
+
+/* ── Count flip — friends label (P6) ── */
+.count-flip { animation: fb-count-in var(--dur-slow) var(--ease-spring); }
+@keyframes fb-count-in { from{transform:translateY(60%)} to{transform:translateY(0)} }
+
+/* ── Sheet/modal in (extra) ── */
+@keyframes fb-sheet-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ════════ REDUCED MOTION ════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .press:active, .press-soft:active { transform: none; }
+  .ring-idle .ring-svg { animation: none !important; }
+}

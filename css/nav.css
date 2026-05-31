@@ -591,7 +591,7 @@ body.nav-on .screen { top: var(--nav-h); }
 .ag-today-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text); border-radius: 99px; padding: 8px 18px; font-size: 13px; font-weight: 600; transition: border-color .18s; }
 .ag-today-btn:hover { border-color: var(--accent); }
 
-.ag-main { display: grid; grid-template-columns: 280px 1fr; gap: 18px; align-items: start; }
+.ag-main { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
 .ag-sidebar { display: flex; flex-direction: column; gap: 14px; }
 
 /* mini month */
@@ -600,7 +600,7 @@ body.nav-on .screen { top: var(--nav-h); }
 .ag-mini-nav { width: 26px; height: 26px; border-radius: 50%; background: var(--bg3); border: 1px solid var(--border); color: var(--mid); }
 .ag-mini-nav:hover { border-color: var(--accent); color: var(--accent); }
 .ag-mini-lbl { font-size: 13px; font-weight: 600; color: var(--text); }
-.ag-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.ag-mini-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .agm-hdr { font-size: 10px; font-weight: 700; color: var(--muted); text-align: center; padding: 4px 0; letter-spacing: 0.06em; }
 .agm-day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; position: relative; background: transparent; border: 0; color: var(--mid); font-size: 12px; font-weight: 500; border-radius: 50%; transition: background .15s, color .15s; }
 .agm-day:hover { background: var(--bg3); color: var(--text); }
@@ -638,7 +638,10 @@ body.nav-on .screen { top: var(--nav-h); }
 .ag-day-hdr.is-today .ag-day-num { color: var(--accent); }
 .ag-day-hdr.is-today { background: color-mix(in srgb, var(--accent) 8%, transparent); }
 
-.ag-week-body { display: grid; grid-template-columns: 60px repeat(7, 1fr); position: relative; }
+.ag-week-body { display: grid; grid-template-columns: 60px repeat(7, 1fr); position: relative; max-height: min(640px, calc(100vh - 300px)); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; overscroll-behavior: contain; }
+.ag-week-body::-webkit-scrollbar { width: 8px; }
+.ag-week-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+.ag-week-body::-webkit-scrollbar-track { background: transparent; }
 .ag-time-gutter { display: flex; flex-direction: column; justify-content: space-between; padding: 4px 8px 4px 0; border-right: 1px solid var(--border2); }
 .ag-hour-lbl { font-size: 10.5px; font-family: var(--fm); color: var(--muted); text-align: right; line-height: 1; }
 .ag-day-col { position: relative; border-left: 1px solid var(--border2); cursor: pointer; transition: background .15s; }
@@ -695,7 +698,7 @@ body.nav-on .screen { top: var(--nav-h); }
 }
 
 /* month grid */
-.ag-month { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.ag-month { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 18px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
 .agmo-hdr { font-size: 11px; font-weight: 700; color: var(--muted); text-align: center; padding: 6px 0; letter-spacing: 0.06em; }
 .agmo-day { aspect-ratio: 1; background: var(--bg3); border: 1px solid var(--border); border-radius: 10px; color: var(--text); display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; padding: 7px; gap: 4px; transition: border-color .15s, background .15s; }
 .agmo-day:hover { border-color: var(--accent); }
@@ -732,7 +735,10 @@ body.nav-on .screen { top: var(--nav-h); }
   .stats-cards { grid-template-columns: repeat(2, 1fr); }
   .stats-two { grid-template-columns: 1fr; }
   .ssub-headrow, .ssub-row { grid-template-columns: 110px 1fr 50px 70px; gap: 10px; }
-  .ag-main { grid-template-columns: 1fr; }
+  .ag-main { grid-template-columns: minmax(0, 1fr); }
+  /* Eénkoloms: toon de dag-inhoud (strip + tijdlijn) eerst, hulpmiddelen (mini-kalender, examens) eronder */
+  .ag-right { order: -1; }
+  .ag-sidebar { order: 1; }
   .ag-head-right { width: 100%; }
   .ag-sum-grid { grid-template-columns: repeat(2, 1fr); }
 }
@@ -740,6 +746,9 @@ body.nav-on .screen { top: var(--nav-h); }
   .ag-nav-lbl { min-width: auto; font-size: 12.5px; }
   /* Op mobiel verbergen we de week-grid en tonen alleen de single-day view */
   .ag-week { display: none; }
+  /* De single-day view heeft al een eigen "plan deze dag"-knop onder de tijdlijn;
+     verberg de dubbele knop in de sidebar zodat hij niet twee keer verschijnt */
+  .ag-sidebar > .ag-plan-day-btn { display: none; }
 }
 
 /* ════════ MOBIELE AGENDA — single-day view ════════ */
@@ -751,27 +760,28 @@ body.nav-on .screen { top: var(--nav-h); }
   display: flex; flex-direction: column;
 }
 .ag-mob-daytabs {
-  display: flex; gap: 6px;
-  overflow-x: auto;
+  display: flex; gap: 4px;
+  /* Alle 7 dagen passen nu binnen het scherm — geen horizontaal swipen meer
+     nodig om bij zondag te komen. */
   padding-bottom: 8px;
   margin-bottom: 12px;
   border-bottom: 1px solid var(--border2);
-  -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .ag-mob-daytabs::-webkit-scrollbar { display: none; }
 .ag-mob-daytab {
-  flex: 1 0 56px;
+  flex: 1 1 0;
+  min-width: 0;
   position: relative;
   display: flex; flex-direction: column; align-items: center;
   gap: 2px;
   background: var(--bg3);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 8px 4px;
+  padding: 8px 2px;
   color: var(--muted);
   font-size: 11px; font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition: background .15s, border-color .15s, color .15s;
 }
@@ -814,10 +824,19 @@ body.nav-on .screen { top: var(--nav-h); }
 .ag-mob-body {
   position: relative;
   display: grid;
-  grid-template-columns: 48px 1fr;
+  grid-template-columns: 48px minmax(0, 1fr);
   border-top: 1px solid var(--border2);
-  overflow: visible;
+  max-height: calc(100dvh - 340px);
+  min-height: 340px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
+.ag-mob-body::-webkit-scrollbar { width: 6px; }
+.ag-mob-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
 .ag-mob-body .ag-time-gutter { padding-top: 0; }
 .ag-mob-body .ag-day-col { border-left: 1px solid var(--border2); }
 
@@ -844,12 +863,17 @@ body.nav-on .screen { top: var(--nav-h); }
   body.nav-on .botnav { display: flex; }
   body.zen .botnav { display: none !important; }
   body.nav-on .screen { bottom: calc(var(--botnav-h) + var(--safe-b)); }
-  /* compact top bar on phones: logo + account only */
+  /* compact top bar on phones: logo + account only.
+     Leaderboard + vrienden zitten al in de bottom-nav "Stats"-tab, dus die
+     iconen weglaten hier — anders duwt de cluster de account-avatar van het
+     scherm af (horizontale clip op smalle telefoons). */
   .nav-tabs { display: none; }
   .nav-plan-btn { display: none; }
   .nav-quick-btn { display: none; }
+  .nav-right .leaderboard-area,
+  .nav-right .friends-area { display: none; }
   .topnav-inner { gap: 12px; justify-content: space-between; }
-  .nav-right { gap: 6px; }
+  .nav-right { gap: 8px; min-width: 0; }
   /* legacy app mobile bar replaced by global bottom nav */
   .mob-bar { display: none !important; }
   .ov-head-title { font-size: 30px; }
@@ -897,3 +921,66 @@ body.nav-on .screen { top: var(--nav-h); }
 }
 .exam-date-chip:hover { border-color:var(--accent); color:var(--accent); }
 .exam-date-chip.active { background:var(--accent); border-color:var(--accent); color:var(--at); }
+
+/* ══════════════════════════════════════════════════════
+   AGENDA — dag-opties popup (openAgendaDayOptions)
+   In de huisstijl: dag-badge + actie-rijen met icoon, label,
+   omschrijving en chevron — i.p.v. losse gekleurde knoppen.
+   ══════════════════════════════════════════════════════ */
+.modal.agdo-modal { max-width: 384px; padding: 0; overflow: hidden; }
+.agdo-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 18px 18px 16px; position: relative;
+  border-bottom: 1px solid var(--border2);
+}
+.agdo-daybadge {
+  flex: 0 0 auto; width: 52px; height: 56px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg3));
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--border));
+  display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1;
+}
+.agdo-daybadge-num { font-family: var(--fm); font-size: 22px; font-weight: 700; color: var(--accent); }
+.agdo-daybadge-mon { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mid); margin-top: 4px; }
+.agdo-headtxt { flex: 1 1 auto; min-width: 0; }
+.agdo-title { font-size: 17px; font-weight: 700; color: var(--text); text-transform: capitalize; line-height: 1.2; }
+.agdo-sub { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.agdo-x {
+  position: absolute; top: 12px; right: 12px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--bg3); border: 1px solid var(--border); color: var(--mid);
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: border-color .15s, color .15s;
+}
+.agdo-x:hover { border-color: var(--accent); color: var(--text); }
+.agdo-actions { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+.agdo-action {
+  display: flex; align-items: center; gap: 13px;
+  width: 100%; text-align: left;
+  padding: 12px 13px; border-radius: var(--r-md);
+  background: var(--bg3); border: 1px solid var(--border);
+  cursor: pointer; transition: border-color .15s, background .15s, transform .08s;
+}
+.agdo-action:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); background: color-mix(in srgb, var(--accent) 6%, var(--bg3)); }
+.agdo-action:active { transform: scale(0.985); }
+.agdo-ic {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg2); color: var(--mid);
+}
+.agdo-ic svg { width: 20px; height: 20px; }
+.agdo-actxt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.agdo-aclbl { font-size: 14.5px; font-weight: 700; color: var(--text); }
+.agdo-acdesc { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.agdo-chev { flex: 0 0 auto; width: 18px; height: 18px; color: var(--muted); transition: transform .15s, color .15s; }
+.agdo-action:hover .agdo-chev { transform: translateX(2px); color: var(--accent); }
+/* primaire (accent) actie */
+.agdo-action.agdo-primary { background: color-mix(in srgb, var(--accent) 12%, var(--bg3)); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+.agdo-action.agdo-primary .agdo-ic { background: var(--accent); color: var(--at); }
+.agdo-action.agdo-primary:hover { background: color-mix(in srgb, var(--accent) 18%, var(--bg3)); border-color: var(--accent); }
+/* gevaarlijke (verwijder) actie */
+.agdo-action.agdo-danger .agdo-ic { color: #f87171; background: color-mix(in srgb, #f87171 14%, var(--bg2)); }
+.agdo-action.agdo-danger .agdo-aclbl { color: #fca5a5; }
+.agdo-action.agdo-danger:hover { border-color: #f87171; background: color-mix(in srgb, #f87171 8%, var(--bg3)); }
+.agdo-action.agdo-danger:hover .agdo-chev { color: #f87171; }
+.agdo-sep { height: 1px; background: var(--border2); margin: 4px 2px; }

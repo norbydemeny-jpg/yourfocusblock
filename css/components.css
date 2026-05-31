@@ -729,7 +729,9 @@ body.running #extendBtns { display: flex; }
   position: fixed;
   top: max(1rem, var(--safe-t));
   left: 50%;
-  transform: translateX(-50%) translateY(-120%);
+  /* Hidden state must clear its own height PLUS the top offset, otherwise a
+     sliver of the green pill peeks at the very top of every screen. */
+  transform: translateX(-50%) translateY(calc(-100% - max(1rem, var(--safe-t)) - 8px));
   background: var(--accent);
   color: var(--at);
   padding: 11px 22px;

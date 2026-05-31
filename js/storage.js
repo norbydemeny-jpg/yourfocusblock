@@ -130,6 +130,21 @@ window.applyLoaded = function applyLoaded(d){
     dayCounted = a.dayCounted || false; running = false;
     // re-id blocks to keep nid unique
     blocks.forEach(b => { b.id = nid++; });
+    // Guard against a "frozen 00:00" restore: if the timer wasn't running and the
+    // saved time had run out, the current block already finished. Advance to the
+    // next unfinished block and prime a full timer so the user reopens ready-to-go
+    // instead of staring at a stopped 00:00 ring on a done block.
+    if(timeLeft <= 0 && !running){
+      const cur = blocks[curBlock];
+      if(cur && (cur.done || cur.skipped)){
+        const nextIdx = blocks.findIndex(b => !b.done && !b.skipped);
+        if(nextIdx >= 0) curBlock = nextIdx;
+      }
+      const nb = blocks[curBlock];
+      curPhase = (nb && nb.isPause) ? 'pause-block' : 'focus';
+      totalTime = phaseDur('focus');
+      timeLeft = totalTime;
+    }
     _restoredDay = true;
   }
 }

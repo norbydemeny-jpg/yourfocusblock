@@ -26,6 +26,9 @@
   <link rel="stylesheet" href="./css/friends.css">
   <link rel="stylesheet" href="./css/social.css">
   <link rel="stylesheet" href="./css/nav.css">
+  <!-- Redesign drop-in: motion system + component refresh (load LAST) -->
+  <link rel="stylesheet" href="./css/motion.css">
+  <link rel="stylesheet" href="./css/redesign.css">
 </head>
 <body>
 
@@ -114,16 +117,22 @@
         <button class="icon-btn" onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button>
       </div>
     </div>
-    <div class="home-hero fade-in">
-      <div class="home-greet" id="homeGreet"></div>
-      <div class="home-title" id="homeTitle">Plan your day.<br><em>Own your focus.</em></div>
-      <div class="home-sub" id="homeSub">Pick how you want to start. You don't have to study all day — just a few focused blocks, done well.</div>
+    <div class="home-grid">
+      <div class="home-main">
+        <div class="home-hero fade-in">
+          <div class="home-greet" id="homeGreet"></div>
+          <div class="home-title" id="homeTitle">Plan your day.<br><em>Own your focus.</em></div>
+          <div class="home-sub" id="homeSub">Pick how you want to start. You don't have to study all day — just a few focused blocks, done well.</div>
+        </div>
+        <div class="cards fade-in" id="startCards"></div>
+      </div>
+      <aside class="home-side">
+        <!-- Home social — who is studying, friends, motivation (filled by app.js/status.js) -->
+        <div class="home-social-wrap fade-in" id="homeSocial"></div>
+        <div class="home-motiv" id="homeMotiv"></div>
+      </aside>
     </div>
-    <div class="cards fade-in" id="startCards"></div>
-    <!-- Home social — who is studying, friends, motivation (filled by app.js/status.js) -->
-    <div class="home-social-wrap fade-in" id="homeSocial"></div>
     <div class="home-foot-note" id="homeFootNote"></div>
-    <div class="home-motiv" id="homeMotiv"></div>
   </div>
 </div>
 
@@ -183,6 +192,11 @@
           <div class="pq-multi-lbl" id="pqMultiDur">Duur per blok</div>
           <div class="pq-multi-pills" id="pqDurPills"></div>
         </div>
+        <button type="button" class="pq-toggle on" id="pqBreakToggle" onclick="plnTogglePqBreak()" aria-pressed="true">
+          <span class="pq-toggle-sw"><span class="pq-toggle-knob"></span></span>
+          <span class="pq-toggle-txt" id="pqBreakToggleTxt">Pauze ertussen</span>
+        </button>
+        <div class="pq-summary" id="pqSummary"></div>
         <div class="pq-multi-actions">
           <button class="pq-multi-add focus" onclick="plnAddMulti('focus')" id="pqMultiFocus">＋ Voeg toe</button>
           <button class="pq-multi-add pause" onclick="plnAddMulti('pause')" id="pqMultiPause">＋ Pauze</button>
@@ -292,10 +306,10 @@
       <div class="rc-foot">
         <div class="quick-add-label" id="quickAddLabel">Quick add</div>
         <div class="quick-add-row">
-          <button class="quick-add-btn" onclick="addQuickBlock(25)" id="qa25"></button>
-          <button class="quick-add-btn" onclick="addQuickBlock(50)" id="qa50"></button>
-          <button class="quick-add-btn pause" onclick="addQuickPause('short')" id="qaShort"></button>
-          <button class="quick-add-btn pause" onclick="addQuickPause('long')" id="qaLong"></button>
+          <button class="quick-add-btn" onclick="openQuickAdd('focus',25)" id="qa25"></button>
+          <button class="quick-add-btn" onclick="openQuickAdd('focus',50)" id="qa50"></button>
+          <button class="quick-add-btn pause" onclick="openQuickAdd('short')" id="qaShort"></button>
+          <button class="quick-add-btn pause" onclick="openQuickAdd('long')" id="qaLong"></button>
         </div>
         <button class="add-block-btn" id="addBlockBtn" onclick="addBlock()">+ Add session</button>
         <button class="rc-build" id="rcBuild" onclick="goProgress('app')" title="Your study village">
@@ -468,6 +482,26 @@
   </div>
 </div>
 
+<!-- ════════ CELEBRATION OVERLAY (focus-complete burst) ════════ -->
+<div id="fbCelebrate" aria-hidden="true">
+  <div class="confetti-wrap"></div>
+  <span class="pulse p1"></span><span class="pulse p2"></span><span class="pulse p3"></span>
+  <div class="cel-check">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+  </div>
+  <div class="cel-title" id="celTitle">Blok voltooid.</div>
+  <div class="cel-line" id="celLine">Mooi gefocust.</div>
+  <div class="cel-stats">
+    <div class="cel-stat"><div class="cs-v" id="celMins">0</div><div class="cs-l" id="celMinsLbl">min focus</div></div>
+    <div class="cel-stat"><div class="cs-v" id="celCount">0/0</div><div class="cs-l" id="celCountLbl">blokken</div></div>
+    <div class="cel-stat"><div class="cs-v" id="celStreakV">0</div><div class="cs-l" id="celStreakLbl">streak</div></div>
+  </div>
+  <div class="cel-btns">
+    <button class="cel-primary press" id="celPrimaryBtn">Volgende blok</button>
+    <button class="cel-ghost" id="celGhostBtn">Terug naar home</button>
+  </div>
+</div>
+
 <!-- ════════ SCRIPTS (order matters — no ES modules) ════════ -->
 <script src="./data/default-settings.js"></script>
 <script src="./js/state.js"></script>
@@ -480,6 +514,8 @@
 <script src="./js/progress.js"></script>
 <script src="./js/settings.js"></script>
 <script src="./js/app.js"></script>
+<!-- Redesign drop-in: press feedback, live-dot wiring, ring states, celebrate() -->
+<script src="./js/redesign.js"></script>
 
 <!-- Supabase modules — geladen als ES module, NA de overige scripts -->
 <script type="module" src="./js/supabaseClient.js"></script>

@@ -245,7 +245,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 'safe' centering: gecentreerd als er ruimte is, maar valt terug op
+     flex-start zodra de inhoud hoger is dan de stage — zo wordt de bovenkant
+     (missie-titel) nooit onbereikbaar weggeknipt bij kleine schermen. */
+  justify-content: safe center;
   gap: 1.1rem;
   padding: 1.5rem 2rem;
   overflow-y: auto;
@@ -602,6 +605,8 @@ body.zen .zen-strip { display: flex; }
 #planner { overflow-y: auto; }
 
 .planner-wrap {
+  width: 100%;
+  min-width: 0;
   max-width: 700px;
   margin: 0 auto;
   display: flex;
@@ -637,11 +642,11 @@ body.zen .zen-strip { display: flex; }
 /* ── Stats row ── */
 .planner-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 .planner-stats.quick-mode {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .planner-stats.quick-mode .ps-item:nth-child(1),
 .planner-stats.quick-mode .ps-item:nth-child(2) {
@@ -741,14 +746,9 @@ body.zen .zen-strip { display: flex; }
 .pq-multi-pills {
   display: flex;
   gap: 6px;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;
   padding-bottom: 2px;
-  scrollbar-width: thin;
 }
-.pq-multi-pills::-webkit-scrollbar { height: 4px; }
-.pq-multi-pills::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 .pq-pill {
   flex: 0 0 auto;
   padding: 7px 14px;

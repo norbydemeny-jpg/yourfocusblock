@@ -127,10 +127,10 @@
 @media (max-width: 820px) {
   /* Stats: 2×2 grid, hide time inputs in quick mode */
   .planner-stats {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .planner-stats.quick-mode {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .planner-wrap { padding: max(1rem, var(--safe-t)) 1rem calc(4rem + var(--safe-b)); }
   .pln-time { width: 38px; font-size: 10px; }
@@ -141,7 +141,7 @@
 @media (max-width: 420px) {
   /* Very small: hide timeline time column */
   .pln-time { display: none; }
-  .planner-stats { grid-template-columns: 1fr 1fr; }
+  .planner-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ── Block detail modal mobile ── */

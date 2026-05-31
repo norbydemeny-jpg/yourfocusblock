@@ -78,10 +78,16 @@ function tick(){
   timeLeft = Math.max(0, Math.round((endTimestamp - now) / 1000));
   if(curPhase === 'focus'){
     const elapsed = (totalTime - timeLeft) / 60;
-    currentSessionMins = Math.max(0, Math.min((curB()?.mins || S.focus), Math.round(elapsed)));
+    const newMins = Math.max(0, Math.min((curB()?.mins || S.focus), Math.round(elapsed)));
+    // Perf: only rebuild the day bar when the displayed minute total actually
+    // changes (~once per minute). Rebuilding it every 250ms tick re-created DOM
+    // nodes 4×/sec, which thrashed the MutationObserver and caused UI lag.
+    if(newMins !== currentSessionMins){
+      currentSessionMins = newMins;
+      renderDayBar();
+    }
   }
   drawRing(); updateTimeText();
-  if(curPhase === 'focus') renderDayBar();
   if(timeLeft <= 0){ phaseComplete(); }
 }
 
@@ -263,7 +269,7 @@ function extendTimer(mins){
   endTimestamp += secs * 1000;
   if(curB()) curB().mins += mins;
   saveData(); renderApp();
-  banner(`+${mins} min toegevoegd`);
+  banner(Tf('timer_extended', {n: mins}) || `+${mins} min toegevoegd`);
 }
 
 /* ---- motivational text ---- */
@@ -307,10 +313,20 @@ function renderCompanionStage(){
   if(!show || (S.companionVis === 'after' && running)){ host.innerHTML = ''; host.style.display = 'none'; return; }
   if(S.companionVis === 'prog' || S.companionVis === 'off'){ host.innerHTML = ''; host.style.display = 'none'; return; }
   host.style.display = 'flex';
+  // Klikbaar: opent rechtstreeks de companion-instellingen zodat een ander
+  // maatje kiezen/aanpassen één tik weg is (versterkt "choosable").
+  host.style.cursor = 'pointer';
+  host.title = (typeof T === 'function' ? T('tab_comp') : 'Companion');
+  host.onclick = () => { if(typeof window.openSettings === 'function') window.openSettings('comp'); };
   const acc = getCSS('--accent');
   const lvl = Math.min(4, Math.floor(houseProgress / 10));
   const st = companionState();
-  host.innerHTML = companionSVG(S.companion, running ? 'active' : 'idle', acc, lvl);
+  // Naam-label (custom naam, anders het type) — alleen zichtbaar op desktop via
+  // CSS, zodat het hoek-maatje als een echt karakter aanvoelt.
+  let nm = (S.companionName && S.companionName.trim()) ? S.companionName.trim() : '';
+  if(!nm && typeof compMeta === 'function'){ const m = compMeta().find(c => c.id === S.companion); if(m) nm = T(m.k); }
+  host.innerHTML = companionSVG(S.companion, running ? 'active' : 'idle', acc, lvl)
+    + (nm ? `<span class="comp-name">${esc(nm)}</span>` : '');
 }
 
 /* ---- WebAudio chime ---- */

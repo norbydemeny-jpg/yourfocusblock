@@ -219,7 +219,13 @@ async function renderFriendsModal(isSilentRefresh = false) {
   }
 
   try {
-    const userId = await _withTimeout(getCurrentUserId(), 5000, 'session');
+    let userId = getCurrentUserId();
+    // Vlak na (her)laden kan de sessie nog niet klaar zijn → even op fbAuthReady
+    // wachten i.p.v. meteen 'log in' te tonen (anders moest je eerst refreshen).
+    if (!userId && window.fbAuthReady) {
+      try { await Promise.race([window.fbAuthReady, new Promise(r => setTimeout(r, 4000))]); } catch (e) {}
+      userId = getCurrentUserId();
+    }
     if (!userId) {
       _friendsCache = null;
       body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('fr_login_msg')}</p>`;
@@ -350,7 +356,7 @@ function renderFriendsList(container, friends) {
       ${visible.map(f => `
         <div class="fr-card" data-fid="${escHtml(f.friend_id || '')}" data-fname="${escHtml(f.username)}" data-favatar="${escHtml(f.avatar_url || '')}">
           <div class="fr-avatar-wrap fr-clickable">
-            ${_frAv(f, 46)}
+            ${_frAv(f, 56)}
             ${_statusDot(f.status)}
           </div>
           <div class="fr-card-info fr-clickable">
@@ -402,7 +408,7 @@ async function _renderWeekSection(host, friendsList) {
       <div class="fr-week-row">
         ${entries.map(e => `
           <button class="fr-week-chip" onclick="openFriendStats('${e.id}','${escHtml(e.username)}','${escHtml(e.avatar)}')">
-            ${_frAv({username: e.username, avatar_url: e.avatar}, 36)}
+            ${_frAv({username: e.username, avatar_url: e.avatar}, 42)}
             <span class="fr-week-name">${escHtml(e.username)}</span>
             <span class="fr-week-mins">${_fmtMins(e.mins)}</span>
           </button>
@@ -424,7 +430,7 @@ function renderRequests(container, requests) {
   container.innerHTML = `<div class="fr-list">
     ${requests.map(r => `
       <div class="fr-card">
-        <div class="fr-avatar-wrap">${_frAv(r, 46)}</div>
+        <div class="fr-avatar-wrap">${_frAv(r, 56)}</div>
         <div class="fr-card-info">
           <div class="fr-card-name">${escHtml(r.username)}</div>
           <div class="fr-card-status-row"><span class="fr-status-txt offline">${T('fr_wants_friend')}</span></div>
@@ -461,7 +467,7 @@ function renderSearchResults(container, results) {
   container.innerHTML = `<div class="fr-list" style="margin-top:1rem">
     ${results.map(u => `
       <div class="fr-card">
-        <div class="fr-avatar-wrap">${_frAv(u, 46)}</div>
+        <div class="fr-avatar-wrap">${_frAv(u, 56)}</div>
         <div class="fr-card-info">
           <div class="fr-card-name">${escHtml(u.username)}</div>
         </div>
@@ -588,12 +594,17 @@ async function _loadFriendStats(friendId) {
   // Vandaag start
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-  const { data: sess } = await supabase
-    .from('study_sessions')
-    .select('minutes, subject, completed_at, block_type')
-    .eq('user_id', friendId)
-    .eq('block_type', 'focus')
-    .order('completed_at', { ascending: false });
+  // Harde timeout zodat het stats-modal nooit eeuwig op "laden…" blijft hangen
+  // bij een stilgevallen verbinding of een RLS-policy die de query blokkeert.
+  const { data: sess } = await _withTimeout(
+    supabase
+      .from('study_sessions')
+      .select('minutes, subject, completed_at, block_type')
+      .eq('user_id', friendId)
+      .eq('block_type', 'focus')
+      .order('completed_at', { ascending: false }),
+    8000, 'friendStats'
+  );
 
   const rows = sess || [];
   let totalMins = 0, weekMins = 0, todayMins = 0;
@@ -642,7 +653,12 @@ async function openFriendStats(friendId, username, avatarUrl) {
   try {
     stats = await _loadFriendStats(friendId);
   } catch (e) {
-    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${T('fr_load_err')}</p>`;
+    const msg = String(e?.message || '');
+    const detail = /^timeout:/.test(msg)
+      ? (T('fr_timeout') || 'De server reageert niet. Check je verbinding.')
+      : (T('fr_load_err') || 'Kon stats niet laden.');
+    body.innerHTML = `<p style="text-align:center;color:var(--muted);padding:2rem 0">${detail}</p>
+      <div style="text-align:center"><button class="btn-ghost" onclick="openFriendStats('${friendId}','${escHtml(username)}','${escHtml(avatarUrl || '')}')">${T('fr_retry') || 'Opnieuw'}</button></div>`;
     return;
   }
 
@@ -662,7 +678,7 @@ async function openFriendStats(friendId, username, avatarUrl) {
 
   body.innerHTML = `
     <div class="fs-head">
-      <div class="fs-avatar">${_frAv({username, avatar_url: avatarUrl}, 64)}</div>
+      <div class="fs-avatar">${_frAv({username, avatar_url: avatarUrl}, 88)}</div>
       <div class="fs-headinfo">
         <div class="fs-name">${escHtml(username)}</div>
         <div class="fs-sub">${stats.sessionsCount} ${T('fs_sessions')}</div>

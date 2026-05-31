@@ -905,6 +905,31 @@ const _PQ_COUNTS = [1, 2, 3, 4, 5, 6, 8, 10];
 const _PQ_DURS   = [15, 25, 30, 45, 50, 60, 75, 90, 120];
 let _pqCount = 2;
 let _pqDur   = 25;
+let _pqAutoBreak = true; // pauzes automatisch tussen focus-blokken invoegen
+
+const _PQ_CLOCK_SVG = '<svg class="pq-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 2"/></svg>';
+
+// Lengte van een automatisch ingevoegde pauze (volgt de gekozen korte-pauze
+// instelling van de gebruiker, met een veilige fallback).
+function _pqBreakMins(){ return (typeof S !== 'undefined' && S && S.short) ? S.short : 5; }
+
+// Verwachte eindtijd ALS je nu de gekozen focus-blokken zou toevoegen — zo zie
+// je live wanneer je dag klaar is, nog vóór je op "toevoegen" klikt.
+function _plnProjectedEnd(){
+  const times = (typeof plnCalcTimes === 'function') ? plnCalcTimes() : [];
+  let endMin;
+  if(times.length){ endMin = times[times.length - 1].endMin; }
+  else { const [h, m] = (plannerStartTime || '09:00').split(':').map(Number); endMin = (h || 0) * 60 + (m || 0); }
+  const n = _pqCount || 1, dur = _pqDur || 25, br = _pqBreakMins();
+  for(let i = 0; i < n; i++){ endMin += dur; if(_pqAutoBreak && i < n - 1) endMin += br; }
+  return plnMinToStr(endMin);
+}
+
+function plnTogglePqBreak(){
+  _pqAutoBreak = !_pqAutoBreak;
+  _plnRenderPqPills();
+  _plnUpdatePqLabels();
+}
 
 function plnSetPqCount(n){
   _pqCount = Math.max(1, Math.min(20, +n || 1));
@@ -920,21 +945,42 @@ function _plnRenderPqPills(){
   const cHost = document.getElementById('pqCountPills');
   if(cHost){
     cHost.innerHTML = _PQ_COUNTS.map(n =>
-      `<button type="button" class="pq-pill ${n === _pqCount ? 'on' : ''}" onclick="plnSetPqCount(${n})">${n}×</button>`
+      `<button type="button" class="pq-pill ${n === _pqCount ? 'on' : ''}" onclick="plnSetPqCount(${n})">${n}</button>`
     ).join('');
   }
   const dHost = document.getElementById('pqDurPills');
   if(dHost){
+    // Sub-label for each duration — vertaald via pqSub() (state.js: PQ_SUB per taal)
     dHost.innerHTML = _PQ_DURS.map(m =>
-      `<button type="button" class="pq-pill ${m === _pqDur ? 'on' : ''}" onclick="plnSetPqDur(${m})">${fmtDur(m)}</button>`
+      `<button type="button" class="pq-pill ${m === _pqDur ? 'on' : ''}" onclick="plnSetPqDur(${m})">${m}<span class="pq-sub">${esc(pqSub(m))}</span></button>`
     ).join('');
+  }
+  // Auto-pauze toggle: weerspiegel huidige staat + vertaalde tekst.
+  const tgl = document.getElementById('pqBreakToggle');
+  if(tgl){
+    tgl.classList.toggle('on', !!_pqAutoBreak);
+    tgl.setAttribute('aria-pressed', _pqAutoBreak ? 'true' : 'false');
+    const txt = document.getElementById('pqBreakToggleTxt');
+    if(txt) txt.textContent = T('pq_auto_break') || 'Pauze ertussen';
+  }
+  // Live preview-balk boven de actieknoppen: aantal × duur = totale focus, en
+  // de verwachte eindtijd (handig om te zien hoe laat je dag klaar is).
+  const sumEl = document.getElementById('pqSummary');
+  if(sumEl){
+    const totalTxt = fmtDur(_pqCount * _pqDur); // gelokaliseerde u/min-eenheden
+    sumEl.innerHTML =
+      `<span class="pq-sum-calc"><b>${_pqCount}</b> × <b>${_pqDur}</b> min</span>` +
+      `<span class="pq-sum-sep">=</span>` +
+      `<span class="pq-sum-total">${esc(totalTxt)} <em>${esc(T('pq_total_focus'))}</em></span>` +
+      `<span class="pq-sum-end">${_PQ_CLOCK_SVG}${esc(_plnProjectedEnd())}</span>`;
   }
 }
 function _plnUpdatePqLabels(){
-  // Action knoppen reflecteren huidige keuze. "+ 3 × 50 min Focus"
-  const sum = `${_pqCount}× ${fmtDur(_pqDur)}`;
+  // Actieknoppen weerspiegelen de keuze, compact zodat ook de smalle
+  // pauze-knop niet afkapt: "＋ 3× 50m Focus" / "＋ 3× 50m Pauze".
+  const sum = `${_pqCount}× ${_pqDur}m`;
   const focusLbl = (typeof T === 'function' ? T('phase_focus') : 'Focus');
-  const pauseLbl = (typeof T === 'function' ? T('phase_short') : 'Pauze');
+  const pauseLbl = (typeof T === 'function' ? T('dpl_type_pause') : 'Pauze');
   const fBtn = document.getElementById('pqMultiFocus');
   if(fBtn) fBtn.innerHTML = `＋ ${esc(sum)} ${esc(focusLbl)}`;
   const pBtn = document.getElementById('pqMultiPause');
@@ -944,25 +990,25 @@ function plnAddMulti(kind){
   if(!D.bb) D.bb = [];
   const n = _pqCount || 1;
   const m = _pqDur || 25;
-  for(let i = 0; i < n; i++){
-    if(kind === 'pause'){
-      D.bb.push({subject:'__pause__', mins:m, note:'', tasks:[], isPause:true});
-    } else {
+  if(kind === 'pause'){
+    for(let i = 0; i < n; i++) D.bb.push({subject:'__pause__', mins:m, note:'', tasks:[], isPause:true});
+  } else {
+    const brMins = _pqBreakMins();
+    for(let i = 0; i < n; i++){
       D.bb.push({subject:'', mins:m, note:'', note2:'', tasks:[], isPause:false});
-      // Voeg automatische pauze tussen lange focus-blokken (≥45 min), behalve
-      // na de laatste — anders krijg je een dubbele pauze als de gebruiker
-      // daarna nog "+ Pauze" klikt.
-      if(m >= 45 && i < n - 1){
-        const brMins = (S && S.short) ? S.short : 10;
+      // Pauze tussen de focus-blokken (instelbaar via de toggle), behalve na de
+      // laatste — een afsluitende pauze heeft geen zin.
+      if(_pqAutoBreak && i < n - 1){
         D.bb.push({subject:'__pause__', mins:brMins, note:'', tasks:[], isPause:true});
       }
     }
   }
   renderPlanner();
 }
-window.plnSetPqCount = plnSetPqCount;
-window.plnSetPqDur   = plnSetPqDur;
-window.plnAddMulti   = plnAddMulti;
+window.plnSetPqCount   = plnSetPqCount;
+window.plnSetPqDur     = plnSetPqDur;
+window.plnAddMulti     = plnAddMulti;
+window.plnTogglePqBreak = plnTogglePqBreak;
 
 /* ---- Duplicate day ---- */
 function duplicatePlan(){

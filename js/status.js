@@ -5,11 +5,24 @@
 
 import { supabase } from './supabaseClient.js';
 
-let _myId      = null;
-let _channel   = null;
-let _friendIds = [];
-let _profiles  = {};   // id → username
-let _statusMap = {};   // id → status
+let _myId        = null;
+let _channel     = null;
+let _friendIds   = [];
+let _profiles    = {};   // id → username
+let _statusMap   = {};   // id → status
+let _myLastStatus = null; // laatst expliciet gezette eigen status (voor heartbeat)
+
+// Een 'studying'/'break'/'online'-status is alleen geldig als hij recent
+// vernieuwd is. Een actieve gebruiker klopt elke ~60s aan (heartbeat hieronder),
+// dus alles ouder dan deze drempel = de tab is dicht/gecrasht → toon offline.
+// Zo verdwijnen 'spook'-sessies (browser geforceerd afgesloten zonder pagehide).
+const STALE_MS = 150 * 1000; // 2,5 min (2 gemiste heartbeats speling)
+function _effectiveStatus(status, updatedAt) {
+  if (!status || status === 'offline') return 'offline';
+  if (!updatedAt) return status; // geen tijdstempel bekend → niet wegfilteren
+  const age = Date.now() - new Date(updatedAt).getTime();
+  return (age > STALE_MS) ? 'offline' : status;
+}
 
 // ── Auth helper ────────────────────────────────────────
 function getCurrentUserId() {
@@ -19,14 +32,24 @@ function getCurrentUserId() {
   return null;
 }
 
+// Bound een hangende write af zodat de fire-and-forget heartbeat geen oneindig
+// groeiende stapel pending upserts opbouwt bij een trage/dode verbinding.
+function _raceTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
+  ]);
+}
+
 // ── Eigen status upserten ──────────────────────────────
 async function updateMyStatus(status) {
   if (!_myId) return;
+  _myLastStatus = status; // onthouden zodat de heartbeat exact dit kan herbevestigen
   try {
-    await supabase.from('user_status').upsert(
+    await _raceTimeout(supabase.from('user_status').upsert(
       { user_id: _myId, status, updated_at: new Date().toISOString() },
       { onConflict: 'user_id' }
-    );
+    ), 5000);
   } catch (e) { console.warn('[Status] upsert failed:', e.message); }
 }
 
@@ -53,14 +76,14 @@ async function loadFriendsAndSubscribe() {
   // 2) Profielen + statussen parallel ophalen
   const [profRes, statRes] = await Promise.all([
     supabase.from('profiles').select('id, username, avatar_url').in('id', _friendIds),
-    supabase.from('user_status').select('user_id, status').in('user_id', _friendIds)
+    supabase.from('user_status').select('user_id, status, updated_at').in('user_id', _friendIds)
   ]);
 
   _profiles = {};
   (profRes.data || []).forEach(p => { _profiles[p.id] = { username: p.username, avatar_url: p.avatar_url || '' }; });
 
   _statusMap = {};
-  (statRes.data || []).forEach(r => { _statusMap[r.user_id] = r.status; });
+  (statRes.data || []).forEach(r => { _statusMap[r.user_id] = _effectiveStatus(r.status, r.updated_at); });
 
   renderWidget(_buildFriendList());
 
@@ -96,6 +119,43 @@ function _buildFriendList() {
   }));
 }
 function _av(f, size){ return (typeof window.fbAvatarHTML === 'function') ? window.fbAvatarHTML(f.username, f.avatar_url, size||28) : `<div class="afw-avatar">${(f.username||'?')[0].toUpperCase()}</div>`; }
+
+// ── Mijn huidige status afleiden uit de timer-toestand ─
+//   timer.js zet 'running' + 'ph-focus/ph-short/ph-long' op <body>; status.js
+//   is een module en kan curPhase/running niet direct lezen, dus gebruiken we
+//   die body-classes als brug. Zo zetten we na terugkeer naar het tabblad de
+//   juiste status terug (i.p.v. 'offline' te blijven).
+function _myActiveStatus() {
+  const b = document.body;
+  if (b.classList.contains('running')) {
+    return b.classList.contains('ph-focus') ? 'studying' : 'break';
+  }
+  return 'online';
+}
+
+// ── Lichtgewicht status-poll: alleen user_status opnieuw ophalen voor de
+//    bekende vriend-IDs. Backup voor als de realtime-subscription stilvalt.
+async function _refreshStatuses() {
+  if (!_myId || _friendIds.length === 0) return;
+  try {
+    const { data } = await supabase
+      .from('user_status')
+      .select('user_id, status, updated_at')
+      .in('user_id', _friendIds);
+    if (!data) return;
+    const next = {};
+    data.forEach(r => { next[r.user_id] = _effectiveStatus(r.status, r.updated_at); });
+    // Alleen hertekenen als er echt iets veranderde (voorkomt animatie-hikjes).
+    const changed = _friendIds.some(id => (next[id] || 'offline') !== (_statusMap[id] || 'offline'));
+    _statusMap = next;
+    if (changed) {
+      renderWidget(_buildFriendList());
+      if (document.getElementById('friendsOv')?.classList.contains('open')) {
+        window.renderFriendsModal?.();
+      }
+    }
+  } catch { /* stil falen — volgende poll probeert opnieuw */ }
+}
 
 // ── Actieve-vrienden widget — homepage + app ───────────
 //   Geen hardcoded NL strings meer: alle labels via Tf()/T() zodat ze in
@@ -182,7 +242,7 @@ function renderWidget(friends) {
           : tfSafe('afw_online_many', { n: online.length }, `${online.length} friends online`);
       }
       appWidget.innerHTML = `
-        <div class="afw-prominent-bar">
+        <div class="afw-prominent-bar${studying.length ? ' afw-live' : ''}">
           <span class="afw-dot${studying.length ? '' : ' afw-dot-quiet'}"></span>
           <span class="afw-prominent-label">${label}</span>
           <div class="afw-prominent-avatars">
@@ -234,17 +294,33 @@ function refreshSocialViews() {
 async function _goOffline() {
   if (!_myId) return;
   try {
-    await supabase.from('user_status').upsert(
+    await _raceTimeout(supabase.from('user_status').upsert(
       { user_id: _myId, status: 'offline', updated_at: new Date().toISOString() },
       { onConflict: 'user_id' }
-    );
+    ), 4000);
   } catch {}
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) _goOffline();
+  if (document.hidden) {
+    _goOffline();
+  } else if (_myId) {
+    // Terug in beeld: we stonden op 'offline'. Zet de juiste status terug en
+    // her-synchroniseer vrienden + realtime. Dit verhelpt het 'ik moest
+    // refreshen'-probleem — terugkeren naar het tabblad re-synct alles.
+    updateMyStatus(_myActiveStatus());
+    loadFriendsAndSubscribe().catch(() => {});
+  }
 });
 window.addEventListener('pagehide', () => _goOffline());
+// Sommige mobiele browsers vuren geen visibilitychange bij app-resume → ook
+// op window-focus opnieuw synchroniseren.
+window.addEventListener('focus', () => {
+  if (_myId && !document.hidden) {
+    updateMyStatus(_myActiveStatus());
+    _refreshStatuses();
+  }
+});
 
 // ── Auth state listener helper ──────────────────────────
 async function handleStatusAuthStateChange(event, session) {
@@ -271,9 +347,28 @@ async function handleStatusAuthStateChange(event, session) {
   _updateLbAreas(_myId);
 }
 
-// ── Periodieke refresh: zelfs zonder TOKEN_REFRESHED-event soms de
-//    friends data opnieuw ophalen zodat statuses/lijst niet vastlopen
-//    als een query stilletjes leeg teruggaf (RLS edge cases).
+// ── Heartbeat (elke 60s): zolang de tab zichtbaar is, mijn eigen status
+//    opnieuw bevestigen zodat updated_at vers blijft. Vrienden zien me daardoor
+//    betrouwbaar als 'studying'/'break'/'online'; sluit/crasht mijn tab, dan
+//    stopt de heartbeat en val ik na STALE_MS vanzelf op 'offline' — ook als
+//    pagehide/visibilitychange nooit vuurde (geforceerd afsluiten, mobiel).
+setInterval(() => {
+  if (!_myId || document.hidden) return;
+  // Herbevestig de exact laatst gezette status (zodat 'break' tijdens een pauze
+  // niet stilletjes naar 'online' degradeert). Nog niets gezet of net offline
+  // geweest → leid af uit de timer-toestand.
+  const s = (_myLastStatus && _myLastStatus !== 'offline') ? _myLastStatus : _myActiveStatus();
+  updateMyStatus(s);
+}, 60 * 1000);
+
+// ── Lichtgewicht status-poll (elke 40s): houdt vriend-statussen vers als de
+//    realtime-subscription stil zou vallen, zonder zware profiel-queries.
+setInterval(() => {
+  if (_myId && !document.hidden) _refreshStatuses();
+}, 40 * 1000);
+
+// ── Zwaardere volledige refresh (elke 3 min): vrienden + profielen opnieuw
+//    laden en realtime opnieuw subscriben — safety-net voor RLS/token edge cases.
 setInterval(() => {
   if (_myId && !document.hidden) loadFriendsAndSubscribe().catch(() => {});
 }, 3 * 60 * 1000);
